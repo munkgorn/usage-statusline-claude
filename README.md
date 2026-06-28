@@ -70,7 +70,7 @@ On each render, Claude Code pipes a JSON payload (model, cwd, git, usage, contex
 2. Reads the **5‑hour / 7‑day** limits from `rate_limits` and the **context‑window** fill from `context_window` in the payload.
 3. Assembles the compact usage row — context, 5‑hour, 7‑day mini‑bars + the model name and effort level.
 
-No network calls and no token — everything comes from the JSON Claude Code already provides. (`rate_limits` is populated for Claude.ai Pro/Max sessions after the first API response; the usage bars are simply hidden when it isn't present.)
+No network calls and no token — everything comes from the JSON Claude Code already provides. (`rate_limits` only appears for Claude.ai Pro/Max sessions after the first API response, so the last‑known 5h/7d values are cached in `/tmp/claude/statusline-rate.cache` and reused at session start; the bars are only hidden until usage has been seen at least once.)
 
 ## Customize
 

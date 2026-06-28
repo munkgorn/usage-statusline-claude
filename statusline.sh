@@ -97,8 +97,16 @@ green_text='\033[38;2;80;200;120m'
 
 five_hour_pct=""
 seven_day_pct=""
+# rate_limits is absent until the first API response (and on a fresh session),
+# so cache the last-known values and reuse them so the bars don't vanish.
+rate_cache="/tmp/claude/statusline-rate.cache"
 fh=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 sd=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+if [ -n "$fh" ] && [ -n "$sd" ]; then
+    mkdir -p /tmp/claude 2>/dev/null && printf '%s %s\n' "$fh" "$sd" > "$rate_cache" 2>/dev/null
+elif [ -f "$rate_cache" ]; then
+    read -r fh sd < "$rate_cache" 2>/dev/null
+fi
 [ -n "$fh" ] && five_hour_pct=$(to_pct "$fh")
 [ -n "$sd" ] && seven_day_pct=$(to_pct "$sd")
 
