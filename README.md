@@ -19,6 +19,7 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 - **Context window** — reads the active session transcript and shows how full the context window is, shifting color (cyan → yellow → red) as it fills. Auto‑detects the **1M context** window. Always visible, even at 0% on a brand‑new session.
 - **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
 - **One‑line usage row** — context, 5‑hour, and 7‑day usage plus the model name + effort level all live on a single lean line below the header.
+- **Color‑coded effort** — the effort label mirrors the CLI `/effort` palette: `low` gold, `medium` green, `high` periwinkle, `xhigh` a purple label with a white shimmer that sweeps across, and `max` an animated pastel rainbow. The animation steps roughly once per second (a status line can't repaint as smoothly as the CLI's own renderer — see [`refreshInterval`](#manual-install)).
 - **Zero config tokens** — reads your Claude Code OAuth token automatically from the macOS Keychain, the Linux secret store, `~/.claude/.credentials.json`, or `$CLAUDE_CODE_OAUTH_TOKEN`.
 - **Fast & self‑contained** — a single Bash script, no daemons, with on‑disk caching for both usage and context lookups.
 
@@ -55,10 +56,13 @@ This copies `statusline.sh` to `~/.claude/statusline.sh`, makes it executable, a
    {
      "statusLine": {
        "type": "command",
-       "command": "bash ~/.claude/statusline.sh"
+       "command": "bash ~/.claude/statusline.sh",
+       "refreshInterval": 1
      }
    }
    ```
+
+   `refreshInterval: 1` re-runs the script every second so the animated **effort** label keeps moving while the session is idle. Drop it if you don't want the per-second refresh.
 
 3. Restart Claude Code (or start a new session). The status line appears at the bottom of the prompt.
 
@@ -80,6 +84,7 @@ Open `~/.claude/statusline.sh` and tweak:
 - **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header; `orange_*` / `green_*` for the usage mini‑bars).
 - **Icons** — the `p_apple` / `p_folder` / `p_branch` (header) and `i_ctx` / `i_5h` / `i_7d` (usage row) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
 - **Mini‑bar width** — `mini_w=5` (the number of cells in each usage/context bar).
+- **Effort colors / animation** — the `render_effort` function (per‑level colors, the `xhigh` shimmer, and the `max` rainbow). The animation speed is set by the `now_ms` divisors inside it.
 - **Cache TTL** — `cache_max_age=60` (seconds).
 - **Context thresholds** — the `50 / 85` percent breakpoints that drive the context color (cyan → yellow → red).
 
