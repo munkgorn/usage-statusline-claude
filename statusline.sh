@@ -135,6 +135,8 @@ context_pct_fmt=$(printf "%2d" "$context_pct")
 i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
 i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
 i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
+p_claude=$(printf '\xef\x81\xa9')   # nf-fa-asterisk (U+F069) — Claude/Anthropic mark
+claude_col='\033[38;2;217;119;87m'  # Claude orange (#D97757)
 
 now_epoch=$(date +%s 2>/dev/null)
 
@@ -150,7 +152,7 @@ if [ -n "$seven_day_pct" ]; then
     [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim} $(fmt_remaining "$sdr" "$now_epoch")${reset}"
 fi
 if [ -n "$model_name" ]; then
-    status_line+="   ${white}${model_name}${reset}"
+    status_line+="   ${claude_col}${p_claude}${reset} ${white}${model_name}${reset}"
     [ -n "$effort_level" ] && status_line+=" $(render_effort "$effort_level")"
 fi
 

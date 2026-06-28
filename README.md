@@ -9,7 +9,7 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 
 > **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.
 >
-> **Line 2** is a single compact usage row — **context window** (`ctx`), **5‑hour limit** (`5h`), and **7‑day limit** (`week`), each shown as a Nerd Font icon (gauge / clock / calendar) + a short text label + a percentage — followed by the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The two rate‑limit segments also show a dim **countdown to reset** (e.g. `2h13m`, `4d 6h`). The context segment always shows, even at **0%** on a fresh session.
+> **Line 2** is a single compact usage row — **context window** (`ctx`), **5‑hour limit** (`5h`), and **7‑day limit** (`week`), each shown as a Nerd Font icon (gauge / clock / calendar) + a short text label + a percentage — followed by an orange **Claude (Anthropic) mark** and the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The two rate‑limit segments also show a dim **countdown to reset** (e.g. `2h13m`, `4d 6h`). The context segment always shows, even at **0%** on a fresh session.
 >
 > The leading glyphs are [Nerd Font](https://www.nerdfonts.com/) icons, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)); the `ctx` / `5h` / `week` text labels render everywhere. The percentages are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
 
@@ -78,7 +78,7 @@ No network calls and no token — everything comes from the JSON Claude Code alr
 Open `~/.claude/statusline.sh` and tweak:
 
 - **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header; the green / amber / red values inside `level_color` for the usage percentages).
-- **Icons** — the `p_apple` / `p_folder` / `p_branch` (header) and `i_ctx` / `i_5h` / `i_7d` (usage row) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
+- **Icons** — the `p_apple` / `p_folder` / `p_branch` (header), `i_ctx` / `i_5h` / `i_7d` (usage row), and `p_claude` (an orange asterisk standing in for the Claude/Anthropic mark, before the model) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs — and tweak `claude_col` for its color.
 - **Effort colors** — the per‑level colors in the `render_effort` function.
 - **Level thresholds** — the `50 / 85` percent breakpoints in `level_color` that drive the green → amber → red color of every usage percentage.
 
