@@ -126,17 +126,12 @@ purple='\033[38;2;180;150;220m'
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 [ -z "$cwd" ] && cwd=$(pwd)
 cwd_display="${cwd/#$HOME/~}"
-# Shorten intermediate path components to single char (zsh-style),
-# keep first segment (~ or /) and last segment full.
-cwd_display=$(awk -F/ '{
-    n = NF
-    for (i = 1; i <= n; i++) {
-        if (i == 1 || i == n) { out = (i == 1) ? $i : out "/" $i }
-        else if ($i == "") { out = out "" }
-        else { out = out "/" substr($i, 1, 1) }
-    }
-    print out
-}' <<< "$cwd_display")
+# Split into parent path + last segment so the last dir can be bolded (p10k-style).
+dir_last="${cwd_display##*/}"
+dir_parent="${cwd_display%/*}"
+if [ "$dir_parent" = "$cwd_display" ]; then
+    dir_parent=""   # no slash present (e.g. "~" or a single segment)
+fi
 
 branch=""
 dirty_count=0
@@ -150,17 +145,30 @@ fi
 model_name=$(echo "$input" | jq -r '.model.display_name // empty')
 effort_level=$(echo "$input" | jq -r '.effort.level // empty')
 
-line0=""
-if [ -n "$model_name" ]; then
-    line0+="${white}${model_name}${reset}"
-    [ -n "$effort_level" ] && line0+=" ${white}(${effort_level})${reset}"
-    line0+="$sep"
+# --- Powerlevel10k-style first line ---
+# Glyphs are built from printf hex escapes so the UTF-8 bytes survive editing.
+p_apple=$(printf '\xef\x85\xb9')   # nf-fa-apple (U+F179)
+p_folder=$(printf '\xef\x81\xbc')  # nf-fa-folder_open (U+F07C)
+p_branch=$(printf '\xef\x90\x98')  # oct git-branch (U+F418), text-height
+
+path_col='\033[38;2;94;195;215m'        # cyan path
+last_col='\033[1;38;2;120;175;255m'     # bold blue last segment
+branch_col='\033[38;2;120;200;120m'     # green branch
+dirty_col='\033[38;2;120;200;120m'      # green *N (set to 220;200;120m for p10k-yellow)
+
+line0="${white}${p_apple}${reset} "
+# directory: cyan folder icon + path, last segment bold (p10k lean dir)
+line0+="${path_col}${p_folder}${reset} "
+if [ -n "$dir_parent" ]; then
+    line0+="${path_col}${dir_parent}/${reset}${last_col}${dir_last}${reset}"
+else
+    line0+="${last_col}${dir_last}${reset}"
 fi
-line0+="${white}${cwd_display}${reset}"
+# vcs: green branch glyph + name + dirty marker (p10k lean vcs)
 if [ -n "$branch" ]; then
-    line0+=" ${dim}on${reset} ${white}${branch}${reset}"
+    line0+="  ${branch_col}${p_branch} ${branch}${reset}"
     if [ "$dirty_count" -gt 0 ] 2>/dev/null; then
-        line0+="$sep${white}${dirty_count} changed${reset}"
+        line0+=" ${dirty_col}*${dirty_count}${reset}"
     fi
 fi
 
@@ -289,20 +297,23 @@ if [[ "$model_id" == *"1m"* ]] || [[ "$model_id" == *"[1m]"* ]]; then
     context_window=1000000
 fi
 
+context_used=0
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     transcript_id=$(basename "$transcript_path" .jsonl)
     ctx_cache="/tmp/claude/statusline-ctx-${transcript_id}.cache"
     transcript_mtime=$(stat -f %m "$transcript_path" 2>/dev/null || stat -c %Y "$transcript_path" 2>/dev/null)
 
-    context_used=""
+    cached_used=""
     if [ -f "$ctx_cache" ]; then
         cached_mtime=$(head -n1 "$ctx_cache" 2>/dev/null)
         if [ "$cached_mtime" = "$transcript_mtime" ]; then
-            context_used=$(sed -n '2p' "$ctx_cache" 2>/dev/null)
+            cached_used=$(sed -n '2p' "$ctx_cache" 2>/dev/null)
         fi
     fi
 
-    if [ -z "$context_used" ]; then
+    if [ -n "$cached_used" ]; then
+        context_used="$cached_used"
+    else
         context_used=$(tail -n 500 "$transcript_path" 2>/dev/null \
             | jq -c 'select(.message.usage)' 2>/dev/null \
             | tail -n 1 \
@@ -310,38 +321,51 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         [ -z "$context_used" ] || [ "$context_used" = "null" ] && context_used=0
         printf "%s\n%s\n" "$transcript_mtime" "$context_used" > "$ctx_cache"
     fi
+fi
 
-    if [ "$context_used" -gt 0 ] 2>/dev/null; then
-        context_pct=$(awk "BEGIN {printf \"%.0f\", $context_used * 100 / $context_window}")
-        [ "$context_pct" -gt 100 ] && context_pct=100
-        context_pct_fmt=$(printf "%2d" "$context_pct")
-        context_used_fmt=$(format_tokens "$context_used")
-        context_window_fmt=$(format_tokens "$context_window")
+# Always render the context line, even at 0% (e.g. a fresh session).
+context_pct=$(awk "BEGIN {printf \"%.0f\", $context_used * 100 / $context_window}")
+[ "$context_pct" -gt 100 ] && context_pct=100
+context_pct_fmt=$(printf "%2d" "$context_pct")
+context_used_fmt=$(format_tokens "$context_used")
+context_window_fmt=$(format_tokens "$context_window")
 
-        ctx_hint=""
-        if [ "$context_pct" -lt 50 ]; then
-            ctx_filled='\033[38;2;120;200;220m'
-            ctx_empty='\033[38;2;40;65;75m'
-            ctx_text='\033[38;2;120;200;220m'
-        elif [ "$context_pct" -lt 70 ]; then
-            ctx_filled='\033[38;2;230;200;120m'
-            ctx_empty='\033[38;2;80;65;40m'
-            ctx_text='\033[38;2;230;200;120m'
-            ctx_hint=" ${ctx_text}→ wrap up + /save${reset}"
-        elif [ "$context_pct" -lt 85 ]; then
-            ctx_filled='\033[38;2;230;200;120m'
-            ctx_empty='\033[38;2;80;65;40m'
-            ctx_text='\033[38;2;230;200;120m'
-            ctx_hint=" ${ctx_text}→ /handoff soon${reset}"
-        else
-            ctx_filled='\033[38;2;220;100;60m'
-            ctx_empty='\033[38;2;90;45;30m'
-            ctx_text='\033[38;2;220;100;60m'
-            ctx_hint=" \033[1;38;2;255;80;80m→ STOP · /handoff now\033[0m"
-        fi
+ctx_hint=""
+if [ "$context_pct" -lt 50 ]; then
+    ctx_filled='\033[38;2;120;200;220m'
+    ctx_empty='\033[38;2;40;65;75m'
+    ctx_text='\033[38;2;120;200;220m'
+elif [ "$context_pct" -lt 70 ]; then
+    ctx_filled='\033[38;2;230;200;120m'
+    ctx_empty='\033[38;2;80;65;40m'
+    ctx_text='\033[38;2;230;200;120m'
+    ctx_hint=" ${ctx_text}→ wrap up + /save${reset}"
+elif [ "$context_pct" -lt 85 ]; then
+    ctx_filled='\033[38;2;230;200;120m'
+    ctx_empty='\033[38;2;80;65;40m'
+    ctx_text='\033[38;2;230;200;120m'
+    ctx_hint=" ${ctx_text}→ /handoff soon${reset}"
+else
+    ctx_filled='\033[38;2;220;100;60m'
+    ctx_empty='\033[38;2;90;45;30m'
+    ctx_text='\033[38;2;220;100;60m'
+    ctx_hint=" \033[1;38;2;255;80;80m→ STOP · /handoff now\033[0m"
+fi
 
-        context_bar=$(build_bar "$context_pct" 12 "$ctx_filled" "$ctx_empty")
-        context_line="${ctx_text}Context${reset}  ${context_bar}  ${ctx_text}${context_pct_fmt}%${reset}  ${dim}${context_used_fmt}/${context_window_fmt}${reset}${ctx_hint}"
+context_bar=$(build_bar "$context_pct" 12 "$ctx_filled" "$ctx_empty")
+context_line="${ctx_text}Context${reset}  ${context_bar}  ${ctx_text}${context_pct_fmt}%${reset}  ${dim}${context_used_fmt}/${context_window_fmt}${reset}${ctx_hint}"
+
+# Model + effort moved to the end of line 2 (context line).
+model_seg=""
+if [ -n "$model_name" ]; then
+    model_seg="${white}${model_name}${reset}"
+    [ -n "$effort_level" ] && model_seg+=" ${dim}${effort_level}${reset}"
+fi
+if [ -n "$model_seg" ]; then
+    if [ -n "$context_line" ]; then
+        context_line+="$sep$model_seg"
+    else
+        context_line="$model_seg"
     fi
 fi
 
