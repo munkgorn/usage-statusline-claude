@@ -4,14 +4,14 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 
 ```
  ~/Documents/code/usage-statusline-claude   main *3
- ctx 42%    5h 8%    7d 21%    Opus 4.8 (1M context) xhigh
+ ctx 42%    5h 8%    week 21%    Opus 4.8 (1M context) xhigh
 ```
 
 > **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.
 >
-> **Line 2** is a single compact usage row — **context window**, **5‑hour limit**, and **7‑day limit**, each shown as a Nerd Font icon (gauge / clock / calendar) + a percentage — followed by the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The context segment always shows, even at **0%** on a fresh session.
+> **Line 2** is a single compact usage row — **context window** (`ctx`), **5‑hour limit** (`5h`), and **7‑day limit** (`week`), each shown as a Nerd Font icon (gauge / clock / calendar) + a short text label + a percentage — followed by the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The context segment always shows, even at **0%** on a fresh session.
 >
-> The icons are [Nerd Font](https://www.nerdfonts.com/) glyphs (`ctx` / `5h` / `7d` above stand in for the gauge / clock / calendar icons), so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)). The percentages are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
+> The leading glyphs are [Nerd Font](https://www.nerdfonts.com/) icons, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)); the `ctx` / `5h` / `week` text labels render everywhere. The percentages are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
 
 ## Features
 
@@ -19,7 +19,7 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 - **Context window** — reads the context‑window fill Claude Code reports; the percentage shifts color (green → amber → red) as it fills. Always visible, even at 0% on a brand‑new session.
 - **Color‑coded levels** — every usage percentage (context, 5‑hour, 7‑day) is colored by how full it is: **green** under 50%, **amber** under 85%, **red** above. No bars to read — the color is the gauge.
 - **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
-- **One‑line usage row** — context, 5‑hour, and 7‑day usage plus the model name + effort level all live on a single lean line below the header.
+- **One‑line usage row** — context (`ctx`), 5‑hour (`5h`), and 7‑day (`week`) usage — each an icon + text label + percentage — plus the model name + effort level, all on a single lean line below the header.
 - **Color‑coded effort** — the effort label mirrors the CLI `/effort` palette: `low` gold, `medium` green, `high` periwinkle, `xhigh` violet, and `max` magenta. (Ultracode mode reports as `xhigh`, so it shows the same violet.)
 - **No network, no tokens** — everything is read from the JSON Claude Code pipes in on stdin: no API calls, no OAuth token, no caching, no daemons — just one Bash script.
 

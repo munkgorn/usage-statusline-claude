@@ -122,14 +122,14 @@ i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
 i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
 i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
 
-status_line="$(level_color "$context_pct")${i_ctx} ${context_pct_fmt}%${reset}"
+status_line="$(level_color "$context_pct")${i_ctx} ctx ${context_pct_fmt}%${reset}"
 if [ -n "$five_hour_pct" ]; then
     fhf=$(printf "%2d" "$five_hour_pct")
-    status_line+="   $(level_color "$five_hour_pct")${i_5h} ${fhf}%${reset}"
+    status_line+="   $(level_color "$five_hour_pct")${i_5h} 5h ${fhf}%${reset}"
 fi
 if [ -n "$seven_day_pct" ]; then
     sdf=$(printf "%2d" "$seven_day_pct")
-    status_line+="   $(level_color "$seven_day_pct")${i_7d} ${sdf}%${reset}"
+    status_line+="   $(level_color "$seven_day_pct")${i_7d} week ${sdf}%${reset}"
 fi
 if [ -n "$model_name" ]; then
     status_line+="${sep}${white}${model_name}${reset}"
