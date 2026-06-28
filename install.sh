@@ -40,7 +40,7 @@ chmod +x "$TARGET"
 ok "Installed $TARGET"
 
 # --- 2. Wire up settings.json ----------------------------------------------
-STATUSLINE_JSON='{"type":"command","command":"bash ~/.claude/statusline.sh","refreshInterval":1}'
+STATUSLINE_JSON='{"type":"command","command":"bash ~/.claude/statusline.sh"}'
 
 if [ -f "$SETTINGS" ]; then
     jq empty "$SETTINGS" 2>/dev/null || die "$SETTINGS is not valid JSON. Fix it and re-run, or add the statusLine block manually."

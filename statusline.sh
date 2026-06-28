@@ -30,70 +30,16 @@ build_mini() {
     printf "${cf}${fs}${ce}${es}${reset}"
 }
 
-# --- Animated effort label (mirrors the CLI /effort colors) ---
-# Millisecond clock for time-based gradients (date %N -> perl -> seconds).
-# STATUSLINE_NOW_MS overrides it for deterministic frame testing.
-now_ms() {
-    [ -n "$STATUSLINE_NOW_MS" ] && { echo "$STATUSLINE_NOW_MS"; return; }
-    local t
-    t=$(date +%s%N 2>/dev/null)
-    if [ "${#t}" -ge 16 ] 2>/dev/null; then
-        echo $(( t / 1000000 )); return
-    fi
-    perl -MTime::HiRes -e 'printf("%d", Time::HiRes::time()*1000)' 2>/dev/null && return
-    echo $(( $(date +%s) * 1000 ))
-}
-
-# HSV (h: any int mod 360, s,v: 0-100) -> "R;G;B".
-hsv_rgb() {
-    local h=$(( ( $1 % 360 + 360 ) % 360 )) s=$2 v=$3
-    local Vf=$(( v * 255 / 100 ))
-    local Cf=$(( Vf * s / 100 ))
-    local m=$(( Vf - Cf ))
-    local seg=$(( h / 60 )) rem=$(( h % 60 )) Xf
-    if [ $(( seg % 2 )) -eq 0 ]; then Xf=$(( Cf * rem / 60 )); else Xf=$(( Cf * (60 - rem) / 60 )); fi
-    local r g b
-    case "$seg" in
-        0) r=$Cf; g=$Xf; b=0 ;;
-        1) r=$Xf; g=$Cf; b=0 ;;
-        2) r=0; g=$Cf; b=$Xf ;;
-        3) r=0; g=$Xf; b=$Cf ;;
-        4) r=$Xf; g=0; b=$Cf ;;
-        *) r=$Cf; g=0; b=$Xf ;;
-    esac
-    printf '%d;%d;%d' $(( r + m )) $(( g + m )) $(( b + m ))
-}
-
-# Render the effort level in its signature color/animation (matched to the CLI /effort GIFs).
+# --- Effort label (static colors matched to the CLI /effort palette) ---
 render_effort() {
     local level="$1"
     [ -z "$level" ] && return
-    local n=${#level} i ch d out="" ms
-    ms=$(now_ms)
-
     case "$level" in
         low)    printf '\033[1;38;2;214;160;60m%s\033[0m'  "$level" ;;  # gold
         medium) printf '\033[1;38;2;110;195;110m%s\033[0m' "$level" ;;  # green
         high)   printf '\033[1;38;2;150;155;235m%s\033[0m' "$level" ;;  # periwinkle
-        xhigh)
-            # violet base (#A17BF8) with a soft lavender shimmer sweeping across
-            local pos=$(( ms / 600 % (n + 3) ))
-            for ((i=0; i<n; i++)); do
-                ch="${level:i:1}"; d=$(( i - pos )); [ $d -lt 0 ] && d=$(( -d ))
-                case "$d" in
-                    0) out+="\033[1;38;2;208;182;252m$ch" ;;
-                    1) out+="\033[1;38;2;184;152;250m$ch" ;;
-                    *) out+="\033[1;38;2;161;123;248m$ch" ;;
-                esac
-            done
-            out+="\033[0m"; printf '%b' "$out" ;;
-        max)
-            # soft rainbow (S55 V90) flowing across the letters over time
-            local phase=$(( ms / 25 % 360 ))
-            for ((i=0; i<n; i++)); do
-                out+="\033[1;38;2;$(hsv_rgb $(( phase + i * 80 )) 55 90)m${level:i:1}"
-            done
-            out+="\033[0m"; printf '%b' "$out" ;;
+        xhigh)  printf '\033[1;38;2;161;123;248m%s\033[0m' "$level" ;;  # violet (#A17BF8)
+        max)    printf '\033[1;38;2;226;120;205m%s\033[0m' "$level" ;;  # magenta (#E278CD)
         *)      printf '\033[2m%s\033[0m' "$level" ;;
     esac
 }
