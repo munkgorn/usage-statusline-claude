@@ -1,22 +1,24 @@
 # usage-statusline-claude
 
-A rich, multi-line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** that shows your live **usage limits** (5‑hour + weekly), **context‑window** consumption, and your current **model / directory / git branch** — all rendered with truecolor progress bars and a Powerlevel10k‑style header right in the prompt.
+A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** styled after [Powerlevel10k](https://github.com/romkatv/powerlevel10k): a lean directory/branch header, then a single usage row showing your live **5‑hour + weekly limits**, **context‑window** fill, and current **model / effort** — all as truecolor mini‑bars right in the prompt.
 
 ```
  ~/Documents/code/usage-statusline-claude   main *3
-
-Context  ▆▆▆▆▆▆▆▆▆▆▆▆  42%  84k/200k  |  Opus 4.8 (1M context) xhigh
-Current  ▆▆▆▆▆▆▆▆▆▆▆▆   8%  Resets in 3h 12m
-Weekly   ▆▆▆▆▆▆▆▆▆▆▆▆  21%  Resets in 4d 6h
+ ▰▰▱▱▱ 42%    ▱▱▱▱▱ 8%    ▰▱▱▱▱ 21%    Opus 4.8 (1M context) xhigh
 ```
 
-> The first line is a **Powerlevel10k‑style header**: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count. Those icons are [Nerd Font](https://www.nerdfonts.com/) glyphs, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)). The `Context` line always shows — even at **0%** on a fresh session — and carries the model name + effort level at its end. The bars are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
+> **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.
+>
+> **Line 2** is a single compact usage row — **context window**, **5‑hour limit**, and **7‑day limit**, each shown as a Nerd Font icon (gauge / clock / calendar) + a 5‑cell mini‑bar + percentage — followed by the **model name and effort level**. The context segment always shows, even at **0%** on a fresh session, and shifts color (cyan → yellow → red) as it fills.
+>
+> The icons are [Nerd Font](https://www.nerdfonts.com/) glyphs, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)). The bars are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
 
 ## Features
 
-- **Usage limits** — pulls your live **5‑hour (`Current`)** and **7‑day (`Weekly`)** utilization from the Claude OAuth usage endpoint, with a "resets in" countdown. Responses are cached for 60s so it stays snappy.
-- **Context window** — reads the active session transcript and shows how full the context window is, with escalating hints (`→ wrap up + /save`, `→ /handoff soon`, `→ STOP · /handoff now`). Auto‑detects the **1M context** window. Always visible, even at 0% on a brand‑new session.
-- **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count. The model name + effort level sit at the end of the `Context` line.
+- **Usage limits** — pulls your live **5‑hour** and **7‑day** utilization from the Claude OAuth usage endpoint, shown as compact mini‑bars + percentage (clock / calendar icons). Responses are cached for 60s so it stays snappy.
+- **Context window** — reads the active session transcript and shows how full the context window is, shifting color (cyan → yellow → red) as it fills. Auto‑detects the **1M context** window. Always visible, even at 0% on a brand‑new session.
+- **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
+- **One‑line usage row** — context, 5‑hour, and 7‑day usage plus the model name + effort level all live on a single lean line below the header.
 - **Zero config tokens** — reads your Claude Code OAuth token automatically from the macOS Keychain, the Linux secret store, `~/.claude/.credentials.json`, or `$CLAUDE_CODE_OAUTH_TOKEN`.
 - **Fast & self‑contained** — a single Bash script, no daemons, with on‑disk caching for both usage and context lookups.
 
@@ -66,7 +68,8 @@ On each render, Claude Code pipes a JSON payload (model, cwd, transcript path, �
 
 1. Builds the Powerlevel10k‑style header from `workspace.current_dir` and `git`.
 2. Fetches usage from `https://api.anthropic.com/api/oauth/usage` using your OAuth token (cached at `/tmp/claude/statusline-usage-cache.json` for 60s).
-3. Parses the last usage record in the session transcript to estimate context‑window fill (cached per‑transcript), and appends the model name + effort level to that line.
+3. Parses the last usage record in the session transcript to estimate context‑window fill (cached per‑transcript).
+4. Assembles the compact usage row — context, 5‑hour, 7‑day mini‑bars + the model name and effort level.
 
 No data leaves your machine except the authenticated usage request to Anthropic's own API.
 
@@ -74,11 +77,11 @@ No data leaves your machine except the authenticated usage request to Anthropic'
 
 Open `~/.claude/statusline.sh` and tweak:
 
-- **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header).
-- **Header icons** — the `p_apple` / `p_folder` / `p_branch` `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
-- **Bar width** — `bar_width=12` (usage bars) and the `12` passed to `build_bar` for the context bar.
+- **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header; `orange_*` / `green_*` for the usage mini‑bars).
+- **Icons** — the `p_apple` / `p_folder` / `p_branch` (header) and `i_ctx` / `i_5h` / `i_7d` (usage row) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
+- **Mini‑bar width** — `mini_w=5` (the number of cells in each usage/context bar).
 - **Cache TTL** — `cache_max_age=60` (seconds).
-- **Context thresholds** — the `50 / 70 / 85` percent breakpoints that drive the color and the `/handoff` hints.
+- **Context thresholds** — the `50 / 85` percent breakpoints that drive the context color (cyan → yellow → red).
 
 ## Uninstall
 

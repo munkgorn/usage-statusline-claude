@@ -82,6 +82,25 @@ build_bar() {
     printf "${color_filled}${filled_str}${color_empty}${empty_str}${reset}"
 }
 
+# Compact p10k-style segmented bar (filled ▰ / empty ▱) for the single status line.
+build_mini() {
+    local pct=$1
+    local width=$2
+    local cf=$3
+    local ce=$4
+    [ "$pct" -lt 0 ] 2>/dev/null && pct=0
+    [ "$pct" -gt 100 ] 2>/dev/null && pct=100
+
+    local filled=$(( pct * width / 100 ))
+    local empty=$(( width - filled ))
+
+    local fs="" es=""
+    for ((i=0; i<filled; i++)); do fs+="▰"; done
+    for ((i=0; i<empty; i++)); do es+="▱"; done
+
+    printf "${cf}${fs}${ce}${es}${reset}"
+}
+
 format_relative_time() {
     local iso_str="$1"
     [ -z "$iso_str" ] || [ "$iso_str" = "null" ] && return
@@ -255,9 +274,7 @@ if $needs_refresh; then
     fi
 fi
 
-rate_lines=""
-
-# Colors for usage bars
+# Colors for the usage mini-bars
 orange_filled='\033[38;2;220;100;60m'
 orange_empty='\033[38;2;90;45;30m'
 green_filled='\033[38;2;80;200;120m'
@@ -265,26 +282,12 @@ green_empty='\033[38;2;30;75;45m'
 orange_text='\033[38;2;220;130;60m'
 green_text='\033[38;2;80;200;120m'
 
+# Usage percentages (5-hour + 7-day) for the compact status line.
+five_hour_pct=""
+seven_day_pct=""
 if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
-    bar_width=12
-
     five_hour_pct=$(echo "$usage_data" | jq -r '.five_hour.utilization // 0' | awk '{printf "%.0f", $1}')
-    five_hour_reset_iso=$(echo "$usage_data" | jq -r '.five_hour.resets_at // empty')
-    five_hour_bar=$(build_bar "$five_hour_pct" "$bar_width" "$orange_filled" "$orange_empty")
-    five_hour_pct_fmt=$(printf "%2d" "$five_hour_pct")
-    five_hour_rel=$(format_relative_time "$five_hour_reset_iso")
-
-    rate_lines+="${orange_text}Current${reset}  ${five_hour_bar}  ${orange_text}${five_hour_pct_fmt}%${reset}"
-    [ -n "$five_hour_rel" ] && rate_lines+="  ${dim}Resets in ${five_hour_rel}${reset}"
-
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
-    seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
-    seven_day_bar=$(build_bar "$seven_day_pct" "$bar_width" "$green_filled" "$green_empty")
-    seven_day_pct_fmt=$(printf "%2d" "$seven_day_pct")
-    seven_day_rel=$(format_relative_time "$seven_day_reset_iso")
-
-    rate_lines+="\n${green_text}Weekly ${reset}  ${seven_day_bar}  ${green_text}${seven_day_pct_fmt}%${reset}"
-    [ -n "$seven_day_rel" ] && rate_lines+="  ${dim}Resets in ${seven_day_rel}${reset}"
 fi
 
 # --- Context window usage (from current transcript) ---
@@ -323,60 +326,48 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     fi
 fi
 
-# Always render the context line, even at 0% (e.g. a fresh session).
+# Context fill drives the bar color (cyan -> yellow -> red), even at 0%.
 context_pct=$(awk "BEGIN {printf \"%.0f\", $context_used * 100 / $context_window}")
 [ "$context_pct" -gt 100 ] && context_pct=100
 context_pct_fmt=$(printf "%2d" "$context_pct")
-context_used_fmt=$(format_tokens "$context_used")
-context_window_fmt=$(format_tokens "$context_window")
 
-ctx_hint=""
 if [ "$context_pct" -lt 50 ]; then
     ctx_filled='\033[38;2;120;200;220m'
     ctx_empty='\033[38;2;40;65;75m'
     ctx_text='\033[38;2;120;200;220m'
-elif [ "$context_pct" -lt 70 ]; then
-    ctx_filled='\033[38;2;230;200;120m'
-    ctx_empty='\033[38;2;80;65;40m'
-    ctx_text='\033[38;2;230;200;120m'
-    ctx_hint=" ${ctx_text}→ wrap up + /save${reset}"
 elif [ "$context_pct" -lt 85 ]; then
     ctx_filled='\033[38;2;230;200;120m'
     ctx_empty='\033[38;2;80;65;40m'
     ctx_text='\033[38;2;230;200;120m'
-    ctx_hint=" ${ctx_text}→ /handoff soon${reset}"
 else
     ctx_filled='\033[38;2;220;100;60m'
     ctx_empty='\033[38;2;90;45;30m'
     ctx_text='\033[38;2;220;100;60m'
-    ctx_hint=" \033[1;38;2;255;80;80m→ STOP · /handoff now\033[0m"
 fi
 
-context_bar=$(build_bar "$context_pct" 12 "$ctx_filled" "$ctx_empty")
-context_line="${ctx_text}Context${reset}  ${context_bar}  ${ctx_text}${context_pct_fmt}%${reset}  ${dim}${context_used_fmt}/${context_window_fmt}${reset}${ctx_hint}"
+# --- Compact single status line: context · 5h · 7d · model (p10k lean) ---
+# Icons are printf hex escapes so the UTF-8 bytes survive editing.
+i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
+i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
+i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
+mini_w=5
 
-# Model + effort moved to the end of line 2 (context line).
-model_seg=""
+status_line="${ctx_text}${i_ctx}${reset} $(build_mini "$context_pct" "$mini_w" "$ctx_filled" "$ctx_empty") ${ctx_text}${context_pct_fmt}%${reset}"
+if [ -n "$five_hour_pct" ]; then
+    five_hour_fmt=$(printf "%2d" "$five_hour_pct")
+    status_line+="  ${orange_text}${i_5h}${reset} $(build_mini "$five_hour_pct" "$mini_w" "$orange_filled" "$orange_empty") ${orange_text}${five_hour_fmt}%${reset}"
+fi
+if [ -n "$seven_day_pct" ]; then
+    seven_day_fmt=$(printf "%2d" "$seven_day_pct")
+    status_line+="  ${green_text}${i_7d}${reset} $(build_mini "$seven_day_pct" "$mini_w" "$green_filled" "$green_empty") ${green_text}${seven_day_fmt}%${reset}"
+fi
 if [ -n "$model_name" ]; then
-    model_seg="${white}${model_name}${reset}"
-    [ -n "$effort_level" ] && model_seg+=" ${dim}${effort_level}${reset}"
-fi
-if [ -n "$model_seg" ]; then
-    if [ -n "$context_line" ]; then
-        context_line+="$sep$model_seg"
-    else
-        context_line="$model_seg"
-    fi
+    status_line+="${sep}${white}${model_name}${reset}"
+    [ -n "$effort_level" ] && status_line+=" ${dim}${effort_level}${reset}"
 fi
 
 printf "%b" "$line0"
-if [ -n "$context_line" ]; then
-    printf "\n\n"
-    printf "%b" "$context_line"
-fi
-if [ -n "$rate_lines" ]; then
-    [ -z "$context_line" ] && printf "\n\n" || printf "\n"
-    printf "%b" "$rate_lines"
-fi
+printf "\n"
+printf "%b" "$status_line"
 
 exit 0
