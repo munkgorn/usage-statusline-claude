@@ -4,7 +4,7 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 
 ```
  ~/Documents/code/usage-statusline-claude   main *3
- ▰▰▱▱▱ 42%    ▱▱▱▱▱ 8%    ▰▱▱▱▱ 21%    Opus 4.8 (1M context) xhigh
+ ■■□□□ 42%    □□□□□ 8%    ■□□□□ 21%    Opus 4.8 (1M context) xhigh
 ```
 
 > **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.

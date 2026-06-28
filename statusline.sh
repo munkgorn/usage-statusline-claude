@@ -82,7 +82,7 @@ build_bar() {
     printf "${color_filled}${filled_str}${color_empty}${empty_str}${reset}"
 }
 
-# Compact p10k-style segmented bar (filled ▰ / empty ▱) for the single status line.
+# Compact p10k-style segmented bar (filled ■ / empty □) for the single status line.
 build_mini() {
     local pct=$1
     local width=$2
@@ -95,8 +95,8 @@ build_mini() {
     local empty=$(( width - filled ))
 
     local fs="" es=""
-    for ((i=0; i<filled; i++)); do fs+="▰"; done
-    for ((i=0; i<empty; i++)); do es+="▱"; done
+    for ((i=0; i<filled; i++)); do fs+="■"; done
+    for ((i=0; i<empty; i++)); do es+="□"; done
 
     printf "${cf}${fs}${ce}${es}${reset}"
 }
