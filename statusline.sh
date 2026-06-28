@@ -30,6 +30,20 @@ level_color() {
     fi
 }
 
+# Compact "time until reset" from a Unix-epoch target (e.g. "4d 6h", "2h13m", "47m").
+fmt_remaining() {
+    local target=${1%%.*} now=${2%%.*} s
+    s=$(( target - now ))
+    [ "$s" -lt 0 ] 2>/dev/null && s=0
+    if [ "$s" -ge 86400 ]; then
+        printf '%dd %dh' $(( s / 86400 )) $(( (s % 86400) / 3600 ))
+    elif [ "$s" -ge 3600 ]; then
+        printf '%dh%02dm' $(( s / 3600 )) $(( (s % 3600) / 60 ))
+    else
+        printf '%dm' $(( s / 60 ))
+    fi
+}
+
 # --- Effort label (static colors matched to the CLI /effort palette) ---
 render_effort() {
     local level="$1"
@@ -91,14 +105,16 @@ fi
 five_hour_pct=""
 seven_day_pct=""
 # rate_limits is absent until the first API response (and on a fresh session),
-# so cache the last-known values and reuse them so the bars don't vanish.
+# so cache the last-known values (incl. the epoch reset times) and reuse them.
 rate_cache="/tmp/claude/statusline-rate.cache"
 fh=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 sd=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+fhr=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+sdr=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
 if [ -n "$fh" ] && [ -n "$sd" ]; then
-    mkdir -p /tmp/claude 2>/dev/null && printf '%s %s\n' "$fh" "$sd" > "$rate_cache" 2>/dev/null
+    mkdir -p /tmp/claude 2>/dev/null && printf '%s %s %s %s\n' "$fh" "$sd" "${fhr:-0}" "${sdr:-0}" > "$rate_cache" 2>/dev/null
 elif [ -f "$rate_cache" ]; then
-    read -r fh sd < "$rate_cache" 2>/dev/null
+    read -r fh sd fhr sdr < "$rate_cache" 2>/dev/null
 fi
 [ -n "$fh" ] && five_hour_pct=$(to_pct "$fh")
 [ -n "$sd" ] && seven_day_pct=$(to_pct "$sd")
@@ -122,14 +138,18 @@ i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
 i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
 i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
 
+now_epoch=$(date +%s 2>/dev/null)
+
 status_line="$(level_color "$context_pct")${i_ctx} ctx ${context_pct_fmt}%${reset}"
 if [ -n "$five_hour_pct" ]; then
     fhf=$(printf "%2d" "$five_hour_pct")
     status_line+="   $(level_color "$five_hour_pct")${i_5h} 5h ${fhf}%${reset}"
+    [ -n "$fhr" ] && [ "${fhr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim} $(fmt_remaining "$fhr" "$now_epoch")${reset}"
 fi
 if [ -n "$seven_day_pct" ]; then
     sdf=$(printf "%2d" "$seven_day_pct")
     status_line+="   $(level_color "$seven_day_pct")${i_7d} week ${sdf}%${reset}"
+    [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim} $(fmt_remaining "$sdr" "$now_epoch")${reset}"
 fi
 if [ -n "$model_name" ]; then
     status_line+="${sep}${white}${model_name}${reset}"
