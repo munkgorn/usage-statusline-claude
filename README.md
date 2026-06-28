@@ -15,18 +15,17 @@ A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en
 
 ## Features
 
-- **Usage limits** — pulls your live **5‑hour** and **7‑day** utilization from the Claude OAuth usage endpoint, shown as compact mini‑bars + percentage (clock / calendar icons). Responses are cached for 60s so it stays snappy.
-- **Context window** — reads the active session transcript and shows how full the context window is, shifting color (cyan → yellow → red) as it fills. Auto‑detects the **1M context** window. Always visible, even at 0% on a brand‑new session.
+- **Usage limits** — reads your live **5‑hour** and **7‑day** utilization straight from the status payload Claude Code provides, shown as compact mini‑bars + percentage (clock / calendar icons).
+- **Context window** — reads the context‑window fill Claude Code reports and shifts color (cyan → yellow → red) as it fills. Always visible, even at 0% on a brand‑new session.
 - **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
 - **One‑line usage row** — context, 5‑hour, and 7‑day usage plus the model name + effort level all live on a single lean line below the header.
-- **Color‑coded effort** — the effort label mirrors the CLI `/effort` palette: `low` gold, `medium` green, `high` periwinkle, `xhigh` a violet label with a lavender shimmer that sweeps across, `max` a soft rainbow that flows over the letters, and `ultracode` white text on an animated purple plasma block. The animation steps roughly once per second (a status line can't repaint as smoothly as the CLI's own renderer — see [`refreshInterval`](#manual-install)).
-- **Zero config tokens** — reads your Claude Code OAuth token automatically from the macOS Keychain, the Linux secret store, `~/.claude/.credentials.json`, or `$CLAUDE_CODE_OAUTH_TOKEN`.
-- **Fast & self‑contained** — a single Bash script, no daemons, with on‑disk caching for both usage and context lookups.
+- **Color‑coded effort** — the effort label mirrors the CLI `/effort` palette: `low` gold, `medium` green, `high` periwinkle, `xhigh` a violet label with a lavender shimmer that sweeps across, and `max` a soft rainbow that flows over the letters. (Ultracode mode reports as `xhigh`, so it shows the xhigh shimmer.) The animation steps roughly once per second (a status line can't repaint as smoothly as the CLI's own renderer — see [`refreshInterval`](#manual-install)).
+- **No network, no tokens** — everything is read from the JSON Claude Code pipes in on stdin: no API calls, no OAuth token, no caching, no daemons — just one Bash script.
 
 ## Requirements
 
 - **Claude Code**
-- `bash`, `curl`, `jq`, `awk` (jq is the only non‑standard one — install via `brew install jq` or `apt install jq`)
+- `bash`, `jq`, `awk` (jq is the only non‑standard one — install via `brew install jq` or `apt install jq`). `perl` or GNU `date` is optional — it only lets the effort animation tick faster than once per second.
 - A **Nerd Font** for the header icons (Apple / folder / git‑branch glyphs). Install one — e.g. `brew install --cask font-meslo-lg-nerd-font` — and select it as your terminal font. Without a Nerd Font the icons show as boxes (□); everything else still works.
 - macOS or Linux
 
@@ -68,14 +67,13 @@ This copies `statusline.sh` to `~/.claude/statusline.sh`, makes it executable, a
 
 ## How it works
 
-On each render, Claude Code pipes a JSON payload (model, cwd, transcript path, …) into the script over stdin. The script then:
+On each render, Claude Code pipes a JSON payload (model, cwd, git, usage, context, …) into the script over stdin. The script then:
 
 1. Builds the Powerlevel10k‑style header from `workspace.current_dir` and `git`.
-2. Fetches usage from `https://api.anthropic.com/api/oauth/usage` using your OAuth token (cached at `/tmp/claude/statusline-usage-cache.json` for 60s).
-3. Parses the last usage record in the session transcript to estimate context‑window fill (cached per‑transcript).
-4. Assembles the compact usage row — context, 5‑hour, 7‑day mini‑bars + the model name and effort level.
+2. Reads the **5‑hour / 7‑day** limits from `rate_limits` and the **context‑window** fill from `context_window` in the payload.
+3. Assembles the compact usage row — context, 5‑hour, 7‑day mini‑bars + the model name and effort level.
 
-No data leaves your machine except the authenticated usage request to Anthropic's own API.
+No network calls and no token — everything comes from the JSON Claude Code already provides. (`rate_limits` is populated for Claude.ai Pro/Max sessions after the first API response; the usage bars are simply hidden when it isn't present.)
 
 ## Customize
 
@@ -85,7 +83,6 @@ Open `~/.claude/statusline.sh` and tweak:
 - **Icons** — the `p_apple` / `p_folder` / `p_branch` (header) and `i_ctx` / `i_5h` / `i_7d` (usage row) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
 - **Mini‑bar width** — `mini_w=5` (the number of cells in each usage/context bar).
 - **Effort colors / animation** — the `render_effort` function (per‑level colors, the `xhigh` shimmer, and the `max` rainbow). The animation speed is set by the `now_ms` divisors inside it.
-- **Cache TTL** — `cache_max_age=60` (seconds).
 - **Context thresholds** — the `50 / 85` percent breakpoints that drive the context color (cyan → yellow → red).
 
 ## Uninstall
