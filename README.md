@@ -1,22 +1,23 @@
 # usage-statusline-claude
 
-A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** styled after [Powerlevel10k](https://github.com/romkatv/powerlevel10k): a lean directory/branch header, then a single usage row showing your live **5‑hour + weekly limits**, **context‑window** fill, and current **model / effort** — all as truecolor mini‑bars right in the prompt.
+A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** styled after [Powerlevel10k](https://github.com/romkatv/powerlevel10k): a lean directory/branch header, then a single minimal usage row showing your live **5‑hour + weekly limits**, **context‑window** fill, and current **model / effort** — each as a Nerd Font icon + a percentage whose **color** tells you the level, right in the prompt.
 
 ```
  ~/Documents/code/usage-statusline-claude   main *3
- ■■□□□ 42%    □□□□□ 8%    ■□□□□ 21%    Opus 4.8 (1M context) xhigh
+ ctx 42%    5h 8%    7d 21%    Opus 4.8 (1M context) xhigh
 ```
 
 > **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.
 >
-> **Line 2** is a single compact usage row — **context window**, **5‑hour limit**, and **7‑day limit**, each shown as a Nerd Font icon (gauge / clock / calendar) + a 5‑cell mini‑bar + percentage — followed by the **model name and effort level**. The context segment always shows, even at **0%** on a fresh session, and shifts color (cyan → yellow → red) as it fills.
+> **Line 2** is a single compact usage row — **context window**, **5‑hour limit**, and **7‑day limit**, each shown as a Nerd Font icon (gauge / clock / calendar) + a percentage — followed by the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The context segment always shows, even at **0%** on a fresh session.
 >
-> The icons are [Nerd Font](https://www.nerdfonts.com/) glyphs, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)). The bars are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
+> The icons are [Nerd Font](https://www.nerdfonts.com/) glyphs (`ctx` / `5h` / `7d` above stand in for the gauge / clock / calendar icons), so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)). The percentages are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
 
 ## Features
 
-- **Usage limits** — reads your live **5‑hour** and **7‑day** utilization straight from the status payload Claude Code provides, shown as compact mini‑bars + percentage (clock / calendar icons).
-- **Context window** — reads the context‑window fill Claude Code reports and shifts color (cyan → yellow → red) as it fills. Always visible, even at 0% on a brand‑new session.
+- **Usage limits** — reads your live **5‑hour** and **7‑day** utilization straight from the status payload Claude Code provides, shown as an icon + percentage (clock / calendar icons) colored by level.
+- **Context window** — reads the context‑window fill Claude Code reports; the percentage shifts color (green → amber → red) as it fills. Always visible, even at 0% on a brand‑new session.
+- **Color‑coded levels** — every usage percentage (context, 5‑hour, 7‑day) is colored by how full it is: **green** under 50%, **amber** under 85%, **red** above. No bars to read — the color is the gauge.
 - **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
 - **One‑line usage row** — context, 5‑hour, and 7‑day usage plus the model name + effort level all live on a single lean line below the header.
 - **Color‑coded effort** — the effort label mirrors the CLI `/effort` palette: `low` gold, `medium` green, `high` periwinkle, `xhigh` violet, and `max` magenta. (Ultracode mode reports as `xhigh`, so it shows the same violet.)
@@ -76,11 +77,10 @@ No network calls and no token — everything comes from the JSON Claude Code alr
 
 Open `~/.claude/statusline.sh` and tweak:
 
-- **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header; `orange_*` / `green_*` for the usage mini‑bars).
+- **Colors** — the `'\033[38;2;R;G;B'm` truecolor escapes near the top and in each section (e.g. `path_col`, `last_col`, `branch_col`, `dirty_col` for the header; the green / amber / red values inside `level_color` for the usage percentages).
 - **Icons** — the `p_apple` / `p_folder` / `p_branch` (header) and `i_ctx` / `i_5h` / `i_7d` (usage row) `printf` hex escapes. Swap in other Nerd Font codepoints (encoded as UTF‑8 bytes, e.g. `printf '\xef\x84\xa6'`) if you prefer different glyphs.
-- **Mini‑bar width** — `mini_w=5` (the number of cells in each usage/context bar).
 - **Effort colors** — the per‑level colors in the `render_effort` function.
-- **Context thresholds** — the `50 / 85` percent breakpoints that drive the context color (cyan → yellow → red).
+- **Level thresholds** — the `50 / 85` percent breakpoints in `level_color` that drive the green → amber → red color of every usage percentage.
 
 ## Uninstall
 

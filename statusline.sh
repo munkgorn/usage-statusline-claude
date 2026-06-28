@@ -17,17 +17,17 @@ sep=" ${dim}|${reset} "
 # Clamp/round any number to an integer percentage 0..100.
 to_pct() { awk "BEGIN{v=$1; if(v<0)v=0; if(v>100)v=100; printf \"%.0f\", v}" 2>/dev/null; }
 
-# Compact p10k-style segmented bar (filled ■ / empty □).
-build_mini() {
-    local pct=$1 width=$2 cf=$3 ce=$4
-    [ "$pct" -lt 0 ] 2>/dev/null && pct=0
-    [ "$pct" -gt 100 ] 2>/dev/null && pct=100
-    local filled=$(( pct * width / 100 ))
-    local empty=$(( width - filled ))
-    local fs="" es="" i
-    for ((i=0; i<filled; i++)); do fs+="■"; done
-    for ((i=0; i<empty; i++)); do es+="□"; done
-    printf "${cf}${fs}${ce}${es}${reset}"
+# Color a value by fill level: green (calm) -> amber -> red (full).
+level_color() {
+    local p=$1
+    [ "$p" -lt 0 ] 2>/dev/null && p=0
+    if [ "$p" -lt 50 ]; then
+        printf '\033[38;2;80;200;120m'    # green
+    elif [ "$p" -lt 85 ]; then
+        printf '\033[38;2;230;200;120m'   # amber
+    else
+        printf '\033[38;2;220;100;60m'    # red
+    fi
 }
 
 # --- Effort label (static colors matched to the CLI /effort palette) ---
@@ -88,13 +88,6 @@ if [ -n "$branch" ]; then
 fi
 
 # ---- Usage rate limits straight from the status payload ----
-orange_filled='\033[38;2;220;100;60m'
-orange_empty='\033[38;2;90;45;30m'
-green_filled='\033[38;2;80;200;120m'
-green_empty='\033[38;2;30;75;45m'
-orange_text='\033[38;2;220;130;60m'
-green_text='\033[38;2;80;200;120m'
-
 five_hour_pct=""
 seven_day_pct=""
 # rate_limits is absent until the first API response (and on a fresh session),
@@ -123,29 +116,20 @@ fi
 context_pct=$(to_pct "${context_pct:-0}")
 context_pct_fmt=$(printf "%2d" "$context_pct")
 
-# Context fill drives the bar color (cyan -> yellow -> red), even at 0%.
-if [ "$context_pct" -lt 50 ]; then
-    ctx_filled='\033[38;2;120;200;220m'; ctx_empty='\033[38;2;40;65;75m'; ctx_text='\033[38;2;120;200;220m'
-elif [ "$context_pct" -lt 85 ]; then
-    ctx_filled='\033[38;2;230;200;120m'; ctx_empty='\033[38;2;80;65;40m'; ctx_text='\033[38;2;230;200;120m'
-else
-    ctx_filled='\033[38;2;220;100;60m'; ctx_empty='\033[38;2;90;45;30m'; ctx_text='\033[38;2;220;100;60m'
-fi
-
 # ---- Compact single status line: context · 5h · 7d · model (p10k lean) ----
+# Minimal: just an icon + the percentage, colored by fill level (no bars).
 i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
 i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
 i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
-mini_w=5
 
-status_line="${ctx_text}${i_ctx}${reset} $(build_mini "$context_pct" "$mini_w" "$ctx_filled" "$ctx_empty") ${ctx_text}${context_pct_fmt}%${reset}"
+status_line="$(level_color "$context_pct")${i_ctx} ${context_pct_fmt}%${reset}"
 if [ -n "$five_hour_pct" ]; then
     fhf=$(printf "%2d" "$five_hour_pct")
-    status_line+="  ${orange_text}${i_5h}${reset} $(build_mini "$five_hour_pct" "$mini_w" "$orange_filled" "$orange_empty") ${orange_text}${fhf}%${reset}"
+    status_line+="   $(level_color "$five_hour_pct")${i_5h} ${fhf}%${reset}"
 fi
 if [ -n "$seven_day_pct" ]; then
     sdf=$(printf "%2d" "$seven_day_pct")
-    status_line+="  ${green_text}${i_7d}${reset} $(build_mini "$seven_day_pct" "$mini_w" "$green_filled" "$green_empty") ${green_text}${sdf}%${reset}"
+    status_line+="   $(level_color "$seven_day_pct")${i_7d} ${sdf}%${reset}"
 fi
 if [ -n "$model_name" ]; then
     status_line+="${sep}${white}${model_name}${reset}"
