@@ -104,6 +104,7 @@ build_mini() {
 # --- Animated effort label (mirrors the CLI /effort colors) ---
 # Millisecond clock for time-based gradients (date %N -> perl -> seconds).
 now_ms() {
+    [ -n "$STATUSLINE_NOW_MS" ] && { echo "$STATUSLINE_NOW_MS"; return; }
     local t
     t=$(date +%s%N 2>/dev/null)
     if [ "${#t}" -ge 16 ] 2>/dev/null; then
@@ -114,61 +115,67 @@ now_ms() {
     echo $(( $(date +%s) * 1000 ))
 }
 
-# Full-saturation hue (any int, taken mod 360) -> "R;G;B". pastel=1 blends toward white.
-hue_rgb() {
-    local h=$(( ( $1 % 360 + 360 ) % 360 ))
-    local pastel=${2:-0}
-    local seg=$(( h / 60 ))
-    local x=$(( 255 * (h % 60) / 60 ))
+# HSV (h: any int mod 360, s,v: 0-100) -> "R;G;B".
+hsv_rgb() {
+    local h=$(( ( $1 % 360 + 360 ) % 360 )) s=$2 v=$3
+    local Vf=$(( v * 255 / 100 ))
+    local Cf=$(( Vf * s / 100 ))
+    local m=$(( Vf - Cf ))
+    local seg=$(( h / 60 )) rem=$(( h % 60 )) Xf
+    if [ $(( seg % 2 )) -eq 0 ]; then Xf=$(( Cf * rem / 60 )); else Xf=$(( Cf * (60 - rem) / 60 )); fi
     local r g b
     case "$seg" in
-        0) r=255;        g=$x;         b=0 ;;
-        1) r=$((255-x)); g=255;        b=0 ;;
-        2) r=0;          g=255;        b=$x ;;
-        3) r=0;          g=$((255-x)); b=255 ;;
-        4) r=$x;         g=0;          b=255 ;;
-        *) r=255;        g=0;          b=$((255-x)) ;;
+        0) r=$Cf; g=$Xf; b=0 ;;
+        1) r=$Xf; g=$Cf; b=0 ;;
+        2) r=0; g=$Cf; b=$Xf ;;
+        3) r=0; g=$Xf; b=$Cf ;;
+        4) r=$Xf; g=0; b=$Cf ;;
+        *) r=$Cf; g=0; b=$Xf ;;
     esac
-    if [ "$pastel" = "1" ]; then
-        r=$(( (r + 255) / 2 )); g=$(( (g + 255) / 2 )); b=$(( (b + 255) / 2 ))
-    fi
-    printf '%d;%d;%d' "$r" "$g" "$b"
+    printf '%d;%d;%d' $(( r + m )) $(( g + m )) $(( b + m ))
 }
 
-# Render the effort level in its signature color/animation.
+# Render the effort level in its signature color/animation (matched to the CLI /effort GIFs).
 render_effort() {
     local level="$1"
     [ -z "$level" ] && return
-    local n=${#level} i ch d out=""
+    local n=${#level} i ch d out="" ms
+    ms=$(now_ms)
 
     case "$level" in
         low)    printf '\033[1;38;2;214;160;60m%s\033[0m'  "$level" ;;  # gold
         medium) printf '\033[1;38;2;110;195;110m%s\033[0m' "$level" ;;  # green
         high)   printf '\033[1;38;2;150;155;235m%s\033[0m' "$level" ;;  # periwinkle
         xhigh)
-            # purple base with a white highlight sweeping across over time
-            # (~2 cells/sec at the 1s refreshInterval floor)
-            local pos=$(( $(now_ms) / 500 % (n + 4) ))
+            # violet base (#A17BF8) with a soft lavender shimmer sweeping across
+            local pos=$(( ms / 600 % (n + 3) ))
             for ((i=0; i<n; i++)); do
-                ch="${level:i:1}"; d=$(( i - pos ))
-                if [ "$d" -eq 0 ]; then
-                    out+="\033[1;38;2;255;255;255m$ch"
-                elif [ "$d" -eq -1 ] || [ "$d" -eq 1 ]; then
-                    out+="\033[1;38;2;225;205;250m$ch"
-                else
-                    out+="\033[1;38;2;165;105;225m$ch"
-                fi
+                ch="${level:i:1}"; d=$(( i - pos )); [ $d -lt 0 ] && d=$(( -d ))
+                case "$d" in
+                    0) out+="\033[1;38;2;208;182;252m$ch" ;;
+                    1) out+="\033[1;38;2;184;152;250m$ch" ;;
+                    *) out+="\033[1;38;2;161;123;248m$ch" ;;
+                esac
             done
             out+="\033[0m"; printf '%b' "$out" ;;
         max)
-            # pastel rainbow that shifts over time (~40°/sec at the 1s refresh floor)
-            local phase=$(( $(now_ms) / 25 % 360 ))
+            # soft rainbow (S55 V90) flowing across the letters over time
+            local phase=$(( ms / 25 % 360 ))
             for ((i=0; i<n; i++)); do
-                out+="\033[1;38;2;$(hue_rgb $(( phase + i * 36 )) 1)m${level:i:1}"
+                out+="\033[1;38;2;$(hsv_rgb $(( phase + i * 80 )) 55 90)m${level:i:1}"
             done
             out+="\033[0m"; printf '%b' "$out" ;;
         ultracode|ultra)
-            printf '\033[1;48;2;120;60;200;38;2;245;235;255m %s \033[0m' "$level" ;;  # big purple block
+            # near-white text on an animated purple plasma block (#321265 -> #7E45E9)
+            local disp=" $level " nn w
+            nn=${#disp}
+            local phase=$(( ms / 90 ))
+            out="\033[1;38;2;245;240;255m"
+            for ((i=0; i<nn; i++)); do
+                w=$(( (i * 40 + phase) % 200 )); [ $w -gt 100 ] && w=$(( 200 - w ))
+                out+="\033[48;2;$(( 50 + 76 * w / 100 ));$(( 18 + 51 * w / 100 ));$(( 101 + 132 * w / 100 ))m${disp:i:1}"
+            done
+            out+="\033[0m"; printf '%b' "$out" ;;
         *)      printf '\033[2m%s\033[0m' "$level" ;;
     esac
 }
