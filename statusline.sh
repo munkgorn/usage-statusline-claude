@@ -12,8 +12,6 @@ white='\033[38;2;220;220;220m'
 dim='\033[2m'
 reset='\033[0m'
 
-sep=" ${dim}|${reset} "
-
 # Clamp/round any number to an integer percentage 0..100.
 to_pct() { awk "BEGIN{v=$1; if(v<0)v=0; if(v>100)v=100; printf \"%.0f\", v}" 2>/dev/null; }
 
@@ -152,7 +150,7 @@ if [ -n "$seven_day_pct" ]; then
     [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim} $(fmt_remaining "$sdr" "$now_epoch")${reset}"
 fi
 if [ -n "$model_name" ]; then
-    status_line+="${sep}${white}${model_name}${reset}"
+    status_line+="   ${white}${model_name}${reset}"
     [ -n "$effort_level" ] && status_line+=" $(render_effort "$effort_level")"
 fi
 
