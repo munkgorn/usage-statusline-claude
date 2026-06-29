@@ -1,22 +1,22 @@
 # usage-statusline-claude
 
-A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** styled after [Powerlevel10k](https://github.com/romkatv/powerlevel10k): a lean directory/branch header, then a single minimal usage row showing your live **5‑hour + weekly limits** (with a reset countdown), **context‑window** fill, and current **model / effort** — each as a Nerd Font icon + a percentage whose **color** tells you the level, right in the prompt.
+A compact, two‑line **status line for [Claude Code](https://docs.claude.com/en/docs/claude-code)** styled after [Powerlevel10k](https://github.com/romkatv/powerlevel10k): a lean directory/branch header, then a single minimal usage row showing your live **5‑hour + weekly limits** (with a reset countdown), **context‑window** fill (with a live token count), and current **model / effort** — each as a Nerd Font icon + a percentage whose **color** tells you the level, right in the prompt.
 
 ```
  ~/Documents/code/usage-statusline-claude   main *3
- ctx 42%    5h 8% 2h13m    week 21% 4d 6h    Opus 4.8 (1M context) xhigh
+ ctx 42% 420k/1m    5h 8% 2h13m    week 21% 4d 6h    Opus 4.8 (1M context) xhigh
 ```
 
 > **Line 1** is a Powerlevel10k‑style header: an Apple logo, a folder icon + the full working directory (last segment bold), then a git‑branch icon + branch name + `*N` dirty‑file count.
 >
-> **Line 2** is a single compact usage row — **context window** (`ctx`), **5‑hour limit** (`5h`), and **7‑day limit** (`week`), each shown as a Nerd Font icon (gauge / clock / calendar) + a short text label + a percentage — followed by an orange **Claude (Anthropic) mark** and the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The two rate‑limit segments also show a dim **countdown to reset** (e.g. `2h13m`, `4d 6h`). The context segment always shows, even at **0%** on a fresh session.
+> **Line 2** is a single compact usage row — **context window** (`ctx`), **5‑hour limit** (`5h`), and **7‑day limit** (`week`), each shown as a Nerd Font icon (gauge / clock / calendar) + a short text label + a percentage — followed by an orange **Claude (Anthropic) mark** and the **model name and effort level**. There are no bars: each percentage is **colored by its fill level** (green → amber → red), so a glance at the color tells you how full each one is. The two rate‑limit segments also show a dim **countdown to reset** (e.g. `2h13m`, `4d 6h`), and the context segment a dim **used / total token count** beside its percentage (e.g. `420k/1m`). The context segment always shows, even at **0%** on a fresh session.
 >
 > The leading glyphs are [Nerd Font](https://www.nerdfonts.com/) icons, so they only render if your terminal uses a Nerd Font (see [Requirements](#requirements)); the `ctx` / `5h` / `week` text labels render everywhere. The percentages are colored (truecolor / 24‑bit) in a real terminal; the example above is plain text.
 
 ## Features
 
 - **Usage limits** — reads your live **5‑hour** and **7‑day** utilization straight from the status payload Claude Code provides, shown as an icon + percentage (clock / calendar icons) colored by level, each with a dim **countdown to when the window resets** (`2h13m` / `4d 6h`), computed from the `resets_at` epoch in the payload.
-- **Context window** — reads the context‑window fill Claude Code reports; the percentage shifts color (green → amber → red) as it fills. Always visible, even at 0% on a brand‑new session.
+- **Context window** — reads the context‑window fill Claude Code reports; the percentage shifts color (green → amber → red) as it fills, with a dim **used / total token count** (e.g. `420k/1m`) beside it. Always visible, even at 0% on a brand‑new session.
 - **Color‑coded levels** — every usage percentage (context, 5‑hour, 7‑day) is colored by how full it is: **green** under 50%, **amber** under 85%, **red** above. No bars to read — the color is the gauge.
 - **Powerlevel10k‑style header** — an Apple logo, a folder icon with the **full** working directory (last path segment bold), and a git‑branch icon with the current branch and a `*N` dirty‑file count.
 - **One‑line usage row** — context (`ctx`), 5‑hour (`5h`), and 7‑day (`week`) usage — each an icon + text label + percentage — plus the model name + effort level, all on a single lean line below the header.

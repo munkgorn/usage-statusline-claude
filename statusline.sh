@@ -42,6 +42,11 @@ fmt_remaining() {
     fi
 }
 
+# Compact a token count for display: "850", "12k", "100k", "1m", "1.5m".
+fmt_tokens() {
+    awk "BEGIN{v=$1; if(v>=1000000){x=v/1000000; if(x==int(x))printf\"%dm\",x; else printf\"%.1fm\",x} else if(v>=1000)printf\"%dk\",v/1000; else printf\"%d\",v}" 2>/dev/null
+}
+
 # --- Effort label (static colors matched to the CLI /effort palette) ---
 render_effort() {
     local level="$1"
@@ -130,6 +135,19 @@ fi
 context_pct=$(to_pct "${context_pct:-0}")
 context_pct_fmt=$(printf "%2d" "$context_pct")
 
+# Raw token usage for the gray "used/total" detail next to the percentage.
+# Prefer the real token counts; if absent, derive used from the percentage.
+ctx_pair=$(echo "$input" | jq -r '
+    (.context_window.context_window_size // 0) as $sz
+    | (.context_window.used_percentage // null) as $pct
+    | (.context_window.current_usage // {}) as $u
+    | (($u.input_tokens // 0) + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0)) as $raw
+    | (if $raw > 0 then $raw elif ($pct != null and $sz > 0) then ($pct * $sz / 100) else 0 end) as $used
+    | "\($used | floor) \($sz)"' 2>/dev/null)
+ctx_used_tokens=${ctx_pair%% *}; ctx_window_size=${ctx_pair##* }
+[ -z "$ctx_used_tokens" ] && ctx_used_tokens=0
+[ -z "$ctx_window_size" ] && ctx_window_size=0
+
 # ---- Compact single status line: context · 5h · 7d · model (p10k lean) ----
 # Minimal: just an icon + the percentage, colored by fill level (no bars).
 i_ctx=$(printf '\xef\x83\xa4')   # nf-fa-dashboard (U+F0E4) — context gauge
@@ -141,6 +159,7 @@ claude_col='\033[38;2;217;119;87m'  # Claude orange (#D97757)
 now_epoch=$(date +%s 2>/dev/null)
 
 status_line="$(level_color "$context_pct")${i_ctx} ctx ${context_pct_fmt}%${reset}"
+[ "$ctx_window_size" -gt 0 ] 2>/dev/null && status_line+="${dim} $(fmt_tokens "$ctx_used_tokens")/$(fmt_tokens "$ctx_window_size")${reset}"
 if [ -n "$five_hour_pct" ]; then
     fhf=$(printf "%2d" "$five_hour_pct")
     status_line+="   $(level_color "$five_hour_pct")${i_5h} 5h ${fhf}%${reset}"
