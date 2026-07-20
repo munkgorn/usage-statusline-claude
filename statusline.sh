@@ -35,13 +35,16 @@ level_color() {
 # Progress bar with 1/8-cell precision: ████▌░░░
 # The filled run is colored by level; the remainder is a dim ░ track.
 b_full=$(printf '\xe2\x96\x88')     # U+2588 full block
-b_track=$(printf '\xe2\x96\x91')    # U+2591 light shade
+b_track=$(printf '\xe2\x96\x88')    # U+2588 full block — same glyph as the fill,
+                                    # only dimmer, so the track reads as one even
+                                    # gray rail (U+2591 renders as a dark slab in
+                                    # some Nerd Fonts instead of a light stipple).
 # Partial cells, 1/8 .. 7/8 of a cell wide (U+258F .. U+2589).
 b_p1=$(printf '\xe2\x96\x8f'); b_p2=$(printf '\xe2\x96\x8e')
 b_p3=$(printf '\xe2\x96\x8d'); b_p4=$(printf '\xe2\x96\x8c')
 b_p5=$(printf '\xe2\x96\x8b'); b_p6=$(printf '\xe2\x96\x8a')
 b_p7=$(printf '\xe2\x96\x89')
-track_col='\033[38;2;68;72;80m'
+track_col='\033[38;2;108;114;128m'   # gray track — light enough not to read as a black slab
 bar_width=8
 render_bar() {
     local p=$1 w=${2:-$bar_width} i=0 eighths full rem part="" out=""
@@ -65,23 +68,71 @@ render_bar() {
     printf '%s' "$out"
 }
 
-# Compact "time until reset" from a Unix-epoch target (e.g. "4d 6h", "2h13m", "47m").
-fmt_remaining() {
-    local target=${1%%.*} now=${2%%.*} s
-    s=$(( target - now ))
-    [ "$s" -lt 0 ] 2>/dev/null && s=0
-    if [ "$s" -ge 86400 ]; then
-        printf '%dd %dh' $(( s / 86400 )) $(( (s % 86400) / 3600 ))
-    elif [ "$s" -ge 3600 ]; then
-        printf '%dh%02dm' $(( s / 3600 )) $(( (s % 3600) / 60 ))
+# ---- Width tiers (Claude Code v2.1.153+ exports COLUMNS before running us) ----
+# Wide: everything. Medium: shorter bars, no pace. Narrow: bars + percentages only.
+cols=${COLUMNS:-0}
+narrow=0; show_detail=1; show_pace=1; bar_w=$bar_width
+if [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 80 ]; then
+    narrow=1; show_detail=0; show_pace=0; bar_w=4
+elif [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 110 ]; then
+    show_pace=0; bar_w=6
+fi
+
+# Format a Unix epoch (BSD date takes -r, GNU date takes -d @).
+epoch_fmt() { date -r "$1" +"$2" 2>/dev/null || date -d "@$1" +"$2" 2>/dev/null; }
+
+# Wall-clock time a window resets at: "15:00" today, "01:00 nextday" tomorrow,
+# "00:00 Mon20Jul" beyond that. Callers pass today's / tomorrow's YYYYMMDD so
+# the comparison costs no extra `date` calls per segment.
+fmt_reset_at() {
+    local target=${1%%.*} today=$2 tomorrow=$3 hm day
+    hm=$(epoch_fmt "$target" '%H:%M')
+    [ -z "$hm" ] && return
+    day=$(epoch_fmt "$target" '%Y%m%d')
+    if [ "$day" = "$today" ]; then
+        printf '%s' "$hm"
+    elif [ "$day" = "$tomorrow" ]; then
+        printf '%s nextday' "$hm"
     else
-        printf '%dm' $(( s / 60 ))
+        printf '%s %s' "$hm" "$(epoch_fmt "$target" '%a%d%b')"
     fi
 }
 
 # Compact a token count for display: "850", "12k", "100k", "1m", "1.5m".
 fmt_tokens() {
     awk "BEGIN{v=$1; if(v>=1000000){x=v/1000000; if(x==int(x))printf\"%dm\",x; else printf\"%.1fm\",x} else if(v>=1000)printf\"%dk\",v/1000; else printf\"%d\",v}" 2>/dev/null
+}
+
+# Pace: how far ahead of / behind an even burn you are inside a usage window.
+# Compares the percentage used against the fraction of the window elapsed, so
+# "down 23%" means you have spent 23 points less than a steady burn would have.
+a_up=$(printf '\xe2\x86\x91')     # U+2191
+a_down=$(printf '\xe2\x86\x93')   # U+2193
+render_pace() {
+    local used=$1 resets=${2%%.*} window=$3 now=$4 elapsed expected delta col arrow
+    [ -n "$resets" ] || return
+    [ "$resets" -gt 0 ] 2>/dev/null || return
+    elapsed=$(( window - (resets - now) ))
+    [ "$elapsed" -lt 0 ] && elapsed=0
+    [ "$elapsed" -gt "$window" ] && elapsed=$window
+    expected=$(( elapsed * 100 / window ))
+    delta=$(( used - expected ))
+    # Deadband: a couple of points either way is noise, not a trend.
+    [ "$delta" -lt 3 ] && [ "$delta" -gt -3 ] && return
+    if [ "$delta" -lt 0 ]; then
+        arrow=$a_down; delta=$(( 0 - delta ))
+        col='\033[38;2;80;200;120m'            # under the line — green
+    else
+        arrow=$a_up
+        if [ "$delta" -lt 10 ]; then
+            col='\033[38;2;150;155;165m'       # roughly on pace — gray
+        elif [ "$delta" -lt 25 ]; then
+            col='\033[38;2;235;150;80m'        # running hot — orange
+        else
+            col='\033[38;2;225;85;70m'         # way ahead of quota — red
+        fi
+    fi
+    printf '%s' " ${col}${arrow}${delta}%${reset}"
 }
 
 # --- Effort label (static colors matched to the CLI /effort palette) ---
@@ -131,7 +182,9 @@ dirty_col='\033[38;2;120;200;120m'      # green *N
 
 line0="${white}${p_apple}${reset} "
 line0+="${path_col}${p_folder}${reset} "
-if [ -n "$dir_parent" ]; then
+if [ "$narrow" -eq 1 ]; then
+    line0+="${last_col}${dir_last}${reset}"
+elif [ -n "$dir_parent" ]; then
     line0+="${path_col}${dir_parent}/${reset}${last_col}${dir_last}${reset}"
 else
     line0+="${last_col}${dir_last}${reset}"
@@ -199,22 +252,27 @@ i_5h=$(printf '\xef\x80\x97')    # nf-fa-clock_o (U+F017) — 5-hour window
 i_7d=$(printf '\xef\x81\xb3')    # nf-fa-calendar (U+F073) — 7-day window
 
 now_epoch=$(date +%s 2>/dev/null)
+today_ymd=$(epoch_fmt "$now_epoch" '%Y%m%d')
+tomorrow_ymd=$(epoch_fmt $(( now_epoch + 86400 )) '%Y%m%d')
 
-# Each segment: icon + label(detail) + bar + percentage, all level-colored.
+# Each segment: icon + label(detail) + bar + percentage + pace, all level-colored.
+# The two rate-limit segments are dropped entirely while they still read 0%.
 status_line="$(level_color "$context_pct")${i_ctx} ctx${reset}"
-[ "$ctx_window_size" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_tokens "$ctx_used_tokens")/$(fmt_tokens "$ctx_window_size"))${reset}"
-status_line+=" $(render_bar "$context_pct")$(level_color "$context_pct")${context_pct_fmt}%${reset}"
-if [ -n "$five_hour_pct" ]; then
+[ "$show_detail" -eq 1 ] && [ "$ctx_window_size" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_tokens "$ctx_used_tokens")/$(fmt_tokens "$ctx_window_size"))${reset}"
+status_line+=" $(render_bar "$context_pct" "$bar_w")$(level_color "$context_pct")${context_pct_fmt}%${reset}"
+if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" -gt 0 ] 2>/dev/null; then
     fhf=$(printf "%2d" "$five_hour_pct")
     status_line+="   $(level_color "$five_hour_pct")${i_5h} 5h${reset}"
-    [ -n "$fhr" ] && [ "${fhr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_remaining "$fhr" "$now_epoch"))${reset}"
-    status_line+=" $(render_bar "$five_hour_pct")$(level_color "$five_hour_pct")${fhf}%${reset}"
+    [ "$show_detail" -eq 1 ] && [ -n "$fhr" ] && [ "${fhr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_reset_at "$fhr" "$today_ymd" "$tomorrow_ymd"))${reset}"
+    status_line+=" $(render_bar "$five_hour_pct" "$bar_w")$(level_color "$five_hour_pct")${fhf}%${reset}"
+    [ "$show_pace" -eq 1 ] && status_line+="$(render_pace "$five_hour_pct" "$fhr" 18000 "$now_epoch")"
 fi
-if [ -n "$seven_day_pct" ]; then
+if [ -n "$seven_day_pct" ] && [ "$seven_day_pct" -gt 0 ] 2>/dev/null; then
     sdf=$(printf "%2d" "$seven_day_pct")
     status_line+="   $(level_color "$seven_day_pct")${i_7d} week${reset}"
-    [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_remaining "$sdr" "$now_epoch"))${reset}"
-    status_line+=" $(render_bar "$seven_day_pct")$(level_color "$seven_day_pct")${sdf}%${reset}"
+    [ "$show_detail" -eq 1 ] && [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_reset_at "$sdr" "$today_ymd" "$tomorrow_ymd"))${reset}"
+    status_line+=" $(render_bar "$seven_day_pct" "$bar_w")$(level_color "$seven_day_pct")${sdf}%${reset}"
+    [ "$show_pace" -eq 1 ] && status_line+="$(render_pace "$seven_day_pct" "$sdr" 604800 "$now_epoch")"
 fi
 
 printf "%b" "$line0"
