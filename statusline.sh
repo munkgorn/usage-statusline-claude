@@ -32,51 +32,76 @@ level_color() {
     fi
 }
 
-# Progress bar with 1/8-cell precision: ████▌░░░
-# The filled run is colored by level; the remainder is a dim ░ track.
-b_full=$(printf '\xe2\x96\x88')     # U+2588 full block
-b_track=$(printf '\xe2\x96\x88')    # U+2588 full block — same glyph as the fill,
-                                    # only dimmer, so the track reads as one even
-                                    # gray rail (U+2591 renders as a dark slab in
-                                    # some Nerd Fonts instead of a light stipple).
-# Partial cells, 1/8 .. 7/8 of a cell wide (U+258F .. U+2589).
-b_p1=$(printf '\xe2\x96\x8f'); b_p2=$(printf '\xe2\x96\x8e')
-b_p3=$(printf '\xe2\x96\x8d'); b_p4=$(printf '\xe2\x96\x8c')
-b_p5=$(printf '\xe2\x96\x8b'); b_p6=$(printf '\xe2\x96\x8a')
-b_p7=$(printf '\xe2\x96\x89')
+# Progress bar 7/8 of a cell tall, optically centered on the text. The lower
+# block glyphs (▆) grow up from the very bottom of the cell — below the baseline,
+# inside the descender space — so a bar drawn with them reads as dropped.
+# Instead: reverse video (ESC[7m) paints the cell in the bar color and flips the
+# glyph to the terminal's own background, so ▁ becomes a 1/8 notch cut out of the
+# BOTTOM, leaving a 7/8 bar spanning 1/8..8/8.
+# Vertical placement has exactly two settings, because one glyph can only notch
+# one edge: ▁ (this one) sits high, ▔ sits one eighth lower. There is nothing in
+# between — a 6/8 bar floating clear of both edges would need two notches in one
+# cell, which a terminal cannot draw.
+# The filled run is colored by level; the remainder is the same shape in gray.
+# Sub-cell (1/8-wide) partials were dropped along with the full block: the
+# half-width variants only exist at full height, and mixing them made the bar
+# look ragged. One cell = 100/w percent, rounded to nearest.
+rev='\033[7m'
+b_full=$(printf '\xe2\x96\x81')     # U+2581 lower one-eighth block, used as the notch
+b_track=$b_full                     # same shape as the fill, only dimmer, so the
+                                    # track reads as one even gray rail
 track_col='\033[38;2;108;114;128m'   # gray track — light enough not to read as a black slab
 bar_width=8
 render_bar() {
-    local p=$1 w=${2:-$bar_width} i=0 eighths full rem part="" out=""
+    local p=$1 w=${2:-$bar_width} i=0 full out=""
     [ "$p" -lt 0 ] 2>/dev/null && p=0
     [ "$p" -gt 100 ] 2>/dev/null && p=100
-    eighths=$(( p * w * 8 / 100 ))
+    full=$(( (p * w + 50) / 100 ))
     # Never render an empty bar for non-zero usage, nor a full bar below 100%.
-    [ "$p" -gt 0 ] && [ "$eighths" -eq 0 ] && eighths=1
-    [ "$p" -lt 100 ] && [ "$eighths" -ge $(( w * 8 )) ] && eighths=$(( w * 8 - 1 ))
-    full=$(( eighths / 8 )); rem=$(( eighths % 8 ))
-    case "$rem" in
-        1) part=$b_p1 ;; 2) part=$b_p2 ;; 3) part=$b_p3 ;; 4) part=$b_p4 ;;
-        5) part=$b_p5 ;; 6) part=$b_p6 ;; 7) part=$b_p7 ;;
-    esac
-    out="$(level_color "$p")"
+    [ "$p" -gt 0 ] && [ "$full" -eq 0 ] && full=1
+    [ "$p" -lt 100 ] && [ "$full" -ge "$w" ] && full=$(( w - 1 ))
+    out="${rev}$(level_color "$p")"
     while [ "$i" -lt "$full" ]; do out+="$b_full"; i=$(( i + 1 )); done
-    if [ -n "$part" ]; then out+="$part"; i=$(( i + 1 )); fi
-    out+="${reset}${track_col}"
+    out+="${reset}${rev}${track_col}"
     while [ "$i" -lt "$w" ]; do out+="$b_track"; i=$(( i + 1 )); done
     out+="${reset}"
     printf '%s' "$out"
 }
 
 # ---- Width tiers (Claude Code v2.1.153+ exports COLUMNS before running us) ----
-# Wide: everything. Medium: shorter bars, no pace. Narrow: bars + percentages only.
+# Narrowing wraps segments onto extra rows (see pack_lines) rather than dropping
+# them, so these tiers only shrink the bars — and, on a genuinely tiny terminal,
+# drop the parenthetical details that would wrap every single segment.
 cols=${COLUMNS:-0}
 narrow=0; show_detail=1; show_pace=1; bar_w=$bar_width
-if [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 80 ]; then
+if [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 55 ]; then
     narrow=1; show_detail=0; show_pace=0; bar_w=4
-elif [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 110 ]; then
-    show_pace=0; bar_w=6
+elif [ "$cols" -gt 0 ] 2>/dev/null && [ "$cols" -lt 100 ]; then
+    bar_w=6
 fi
+
+# Pack segments into as many rows as the terminal width needs, greedily: keep
+# filling the current row, start a new one when the next segment would overflow.
+# Every segment carries a precomputed display width, because ${#s} counts neither
+# ANSI escapes (zero columns) nor the multi-byte Nerd Font glyphs (one column)
+# correctly. Args after the gap are text/width pairs. cols=0 (older Claude Code,
+# which does not export COLUMNS) means "unknown width" and packs onto one row.
+pack_lines() {
+    local gap=$1 gw=$2 out="" cur="" cur_w=0 t w
+    shift 2
+    while [ "$#" -gt 1 ]; do
+        t=$1; w=$2; shift 2
+        [ -z "$t" ] && continue
+        if [ -z "$cur" ]; then
+            cur=$t; cur_w=$w
+        elif [ "$cols" -gt 0 ] 2>/dev/null && [ $(( cur_w + gw + w )) -gt "$cols" ]; then
+            out+="$cur"$'\n'; cur=$t; cur_w=$w
+        else
+            cur+="${gap}${t}"; cur_w=$(( cur_w + gw + w ))
+        fi
+    done
+    printf '%s%s' "$out" "$cur"
+}
 
 # Format a Unix epoch (BSD date takes -r, GNU date takes -d @).
 epoch_fmt() { date -r "$1" +"$2" 2>/dev/null || date -d "@$1" +"$2" 2>/dev/null; }
@@ -132,7 +157,9 @@ render_pace() {
             col='\033[38;2;225;85;70m'         # way ahead of quota — red
         fi
     fi
-    printf '%s' " ${col}${arrow}${delta}%${reset}"
+    # Prefixed with its own display width (tab-separated, so the segment's own
+    # leading space survives) — leading space + arrow + digits + percent sign.
+    printf '%s\t%s' "$(( 3 + ${#delta} ))" " ${col}${arrow}${delta}%${reset}"
 }
 
 # --- Effort label (static colors matched to the CLI /effort palette) ---
@@ -152,6 +179,21 @@ render_effort() {
 # ---- Directory + git (Powerlevel10k-style first line) ----
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 [ -z "$cwd" ] && cwd=$(pwd)
+# In a Claude worktree session the work happens in .worktree.path; show that
+# instead whenever cwd sits outside it (e.g. still the original checkout).
+wt_path=$(echo "$input" | jq -r '.worktree.path // empty')
+if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+    case "$cwd/" in "$wt_path"/*) ;; *) cwd=$wt_path ;; esac
+fi
+# Linked worktree (any `git worktree add`, not only Claude's): the payload says
+# so via .workspace.git_worktree; older Claude Code lacks it, so also ask git —
+# a linked worktree's git dir lives under <main>/.git/worktrees/<name>.
+is_wt=0
+if [ -n "$wt_path" ] || [ -n "$(echo "$input" | jq -r '.workspace.git_worktree // empty')" ]; then
+    is_wt=1
+elif [ -d "$cwd" ]; then
+    case "$(git -C "$cwd" rev-parse --absolute-git-dir 2>/dev/null)" in */worktrees/*) is_wt=1 ;; esac
+fi
 cwd_display="${cwd/#$HOME/~}"
 # Split into parent path + last segment so the last dir can be bolded.
 dir_last="${cwd_display##*/}"
@@ -180,25 +222,42 @@ last_col='\033[1;38;2;120;175;255m'     # bold blue last segment
 branch_col='\033[38;2;120;200;120m'     # green branch
 dirty_col='\033[38;2;120;200;120m'      # green *N
 
-line0="${white}${p_apple}${reset} "
-line0+="${path_col}${p_folder}${reset} "
-if [ "$narrow" -eq 1 ]; then
-    line0+="${last_col}${dir_last}${reset}"
-elif [ -n "$dir_parent" ]; then
-    line0+="${path_col}${dir_parent}/${reset}${last_col}${dir_last}${reset}"
-else
-    line0+="${last_col}${dir_last}${reset}"
+# Worktree: file-tree glyph instead of the folder, and the last segment in amber.
+dir_glyph="${path_col}${p_folder}"
+if [ "$is_wt" -eq 1 ]; then
+    dir_glyph='\033[38;2;230;170;80m'"$(printf '\xf3\xb0\x99\x85')"   # nf-md-file_tree (U+F0645)
+    last_col='\033[1;38;2;230;170;80m'  # bold amber last segment
 fi
+
+# Header segments: path, git, model. Each is built with its display width so the
+# packer can wrap them; a segment is never split across rows.
+h_dir="${white}${p_apple}${reset} ${dir_glyph}${reset} "
+if [ "$narrow" -eq 1 ] || [ -z "$dir_parent" ]; then
+    h_dir+="${last_col}${dir_last}${reset}"
+    w_dir=$(( 4 + ${#dir_last} ))          # apple + space + folder + space
+else
+    h_dir+="${path_col}${dir_parent}/${reset}${last_col}${dir_last}${reset}"
+    w_dir=$(( 4 + ${#dir_parent} + 1 + ${#dir_last} ))
+fi
+
+h_git=""; w_git=0
 if [ -n "$branch" ]; then
-    line0+="  ${branch_col}${p_branch} ${branch}${reset}"
+    h_git="${branch_col}${p_branch} ${branch}${reset}"
+    w_git=$(( 2 + ${#branch} ))            # branch glyph + space + name
     if [ "$dirty_count" -gt 0 ] 2>/dev/null; then
-        line0+=" ${dirty_col}*${dirty_count}${reset}"
+        h_git+=" ${dirty_col}*${dirty_count}${reset}"
+        w_git=$(( w_git + 2 + ${#dirty_count} ))
     fi
 fi
-# Model + effort ride at the end of the header line.
+
+h_model=""; w_model=0
 if [ -n "$model_name" ]; then
-    line0+="   ${claude_col}${p_claude}${reset} ${white}${model_name}${reset}"
-    [ -n "$effort_level" ] && line0+=" $(render_effort "$effort_level")"
+    h_model="${claude_col}${p_claude}${reset} ${white}${model_name}${reset}"
+    w_model=$(( 2 + ${#model_name} ))      # Claude mark + space + name
+    if [ -n "$effort_level" ]; then
+        h_model+=" $(render_effort "$effort_level")"
+        w_model=$(( w_model + 1 + ${#effort_level} ))
+    fi
 fi
 
 # ---- Usage rate limits straight from the status payload ----
@@ -255,28 +314,60 @@ now_epoch=$(date +%s 2>/dev/null)
 today_ymd=$(epoch_fmt "$now_epoch" '%Y%m%d')
 tomorrow_ymd=$(epoch_fmt $(( now_epoch + 86400 )) '%Y%m%d')
 
-# Each segment: icon + label(detail) + bar + percentage + pace, all level-colored.
-# The two rate-limit segments are dropped entirely while they still read 0%.
-status_line="$(level_color "$context_pct")${i_ctx} ctx${reset}"
-[ "$show_detail" -eq 1 ] && [ "$ctx_window_size" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_tokens "$ctx_used_tokens")/$(fmt_tokens "$ctx_window_size"))${reset}"
-status_line+=" $(render_bar "$context_pct" "$bar_w")$(level_color "$context_pct")${context_pct_fmt}%${reset}"
+# Each segment: icon + label(detail) + bar + percentage + pace, all level-colored,
+# built alongside its display width for the packer. The two rate-limit segments
+# are dropped entirely while they still read 0%.
+# label_w counts the icon (1) + space + the label text.
+build_usage_seg() {
+    local pct=$1 icon=$2 label=$3 detail=$4 resets=$5 window=$6
+    local txt w pace pace_w
+    txt="$(level_color "$pct")${icon} ${label}${reset}"
+    w=$(( 2 + ${#label} ))
+    if [ -n "$detail" ]; then
+        txt+="${dim}(${detail})${reset}"
+        w=$(( w + 2 + ${#detail} ))
+    fi
+    txt+=" $(render_bar "$pct" "$bar_w") $(level_color "$pct")$(printf '%2d' "$pct")%${reset}"
+    w=$(( w + 1 + bar_w + 1 + 3 ))
+    if [ "$show_pace" -eq 1 ]; then
+        pace=$(render_pace "$pct" "$resets" "$window" "$now_epoch")
+        if [ -n "$pace" ]; then
+            pace_w=${pace%%	*}
+            txt+="${pace#*	}"
+            w=$(( w + pace_w ))
+        fi
+    fi
+    printf '%s\t%s' "$w" "$txt"
+}
+
+# A window's parenthetical detail, empty when it should not be shown.
+ctx_detail=""
+[ "$show_detail" -eq 1 ] && [ "$ctx_window_size" -gt 0 ] 2>/dev/null &&
+    ctx_detail="$(fmt_tokens "$ctx_used_tokens")/$(fmt_tokens "$ctx_window_size")"
+fh_detail=""
+[ "$show_detail" -eq 1 ] && [ -n "$fhr" ] && [ "${fhr%%.*}" -gt 0 ] 2>/dev/null &&
+    fh_detail="$(fmt_reset_at "$fhr" "$today_ymd" "$tomorrow_ymd")"
+sd_detail=""
+[ "$show_detail" -eq 1 ] && [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null &&
+    sd_detail="$(fmt_reset_at "$sdr" "$today_ymd" "$tomorrow_ymd")"
+
+seg=$(build_usage_seg "$context_pct" "$i_ctx" "ctx" "$ctx_detail" "" 0)
+w_ctx=${seg%%	*}; s_ctx=${seg#*	}
+
+s_5h=""; w_5h=0
 if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" -gt 0 ] 2>/dev/null; then
-    fhf=$(printf "%2d" "$five_hour_pct")
-    status_line+="   $(level_color "$five_hour_pct")${i_5h} 5h${reset}"
-    [ "$show_detail" -eq 1 ] && [ -n "$fhr" ] && [ "${fhr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_reset_at "$fhr" "$today_ymd" "$tomorrow_ymd"))${reset}"
-    status_line+=" $(render_bar "$five_hour_pct" "$bar_w")$(level_color "$five_hour_pct")${fhf}%${reset}"
-    [ "$show_pace" -eq 1 ] && status_line+="$(render_pace "$five_hour_pct" "$fhr" 18000 "$now_epoch")"
-fi
-if [ -n "$seven_day_pct" ] && [ "$seven_day_pct" -gt 0 ] 2>/dev/null; then
-    sdf=$(printf "%2d" "$seven_day_pct")
-    status_line+="   $(level_color "$seven_day_pct")${i_7d} week${reset}"
-    [ "$show_detail" -eq 1 ] && [ -n "$sdr" ] && [ "${sdr%%.*}" -gt 0 ] 2>/dev/null && status_line+="${dim}($(fmt_reset_at "$sdr" "$today_ymd" "$tomorrow_ymd"))${reset}"
-    status_line+=" $(render_bar "$seven_day_pct" "$bar_w")$(level_color "$seven_day_pct")${sdf}%${reset}"
-    [ "$show_pace" -eq 1 ] && status_line+="$(render_pace "$seven_day_pct" "$sdr" 604800 "$now_epoch")"
+    seg=$(build_usage_seg "$five_hour_pct" "$i_5h" "5h" "$fh_detail" "$fhr" 18000)
+    w_5h=${seg%%	*}; s_5h=${seg#*	}
 fi
 
-printf "%b" "$line0"
+s_7d=""; w_7d=0
+if [ -n "$seven_day_pct" ] && [ "$seven_day_pct" -gt 0 ] 2>/dev/null; then
+    seg=$(build_usage_seg "$seven_day_pct" "$i_7d" "week" "$sd_detail" "$sdr" 604800)
+    w_7d=${seg%%	*}; s_7d=${seg#*	}
+fi
+
+printf "%b" "$(pack_lines "  " 2 "$h_dir" "$w_dir" "$h_git" "$w_git" "$h_model" "$w_model")"
 printf "\n"
-printf "%b" "$status_line"
+printf "%b" "$(pack_lines "   " 3 "$s_ctx" "$w_ctx" "$s_5h" "$w_5h" "$s_7d" "$w_7d")"
 
 exit 0
