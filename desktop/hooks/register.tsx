@@ -33,6 +33,9 @@ const AUTO_CLOSE_MS = 20_000
 
 const git = async ($: EngineInterface, cwd: string, args: string[]) => {
   // The session folder may be an untrusted repo: its core.fsmonitor would run on `git status`.
+  // shortcut: a repo clean filter (filter.<name>.clean + .gitattributes) still runs on
+  // `git status`, as it does for Claude Code's own git status in the same folder; count
+  // dirty files with `diff-index` + `ls-files --others` if that exposure ever matters.
   const ran = await $.process
     .run(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false', '-C', cwd, ...args], { timeoutMs: 3000 })
     .catch(() => null)
