@@ -32,7 +32,10 @@ const PX_PER_CELL = 9.2
 const AUTO_CLOSE_MS = 20_000
 
 const git = async ($: EngineInterface, cwd: string, args: string[]) => {
-  const ran = await $.process.run(['git', '-C', cwd, ...args], { timeoutMs: 3000 }).catch(() => null)
+  // The session folder may be an untrusted repo: its core.fsmonitor would run on `git status`.
+  const ran = await $.process
+    .run(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false', '-C', cwd, ...args], { timeoutMs: 3000 })
+    .catch(() => null)
 
   return ran !== null && ran.exitCode === 0 ? ran.stdout.trim() : ''
 }

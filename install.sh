@@ -28,7 +28,12 @@ mkdir -p "$CLAUDE_DIR"
 
 # --- 1. Install the script -------------------------------------------------
 # Prefer a local copy (when run from a clone); fall back to downloading.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+# Under `curl | bash` BASH_SOURCE is empty; falling back to $0 would resolve to
+# the current directory and install whatever happens to sit there.
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+fi
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/statusline.sh" ]; then
     info "Installing statusline.sh from local checkout"
     cp "$SCRIPT_DIR/statusline.sh" "$TARGET"
