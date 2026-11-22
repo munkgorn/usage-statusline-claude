@@ -1,0 +1,7 @@
+{
+  "name": "usage-statusline-claude",
+  "owner": { "name": "munkgorn" },
+  "plugins": [
+    { "name": "agent-activity", "source": "./desktop", "description": "Claude desktop band above the prompt: main loop + subagents activity, workspace path, context / 5h / weekly limits" }
+  ]
+}

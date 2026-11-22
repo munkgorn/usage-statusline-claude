@@ -55,5 +55,25 @@ else
     ok "Created $SETTINGS"
 fi
 
+# --- 3. Claude desktop band (plugin) ----------------------------------------
+# The desktop app does not draw statusLine; the agent-activity plugin draws the
+# same data above the prompt there, and only there (terminal keeps statusline.sh).
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/.claude-plugin/marketplace.json" ]; then
+    MARKET_SRC="$SCRIPT_DIR"
+else
+    MARKET_SRC="munkgorn/usage-statusline-claude"
+fi
+if command -v claude >/dev/null 2>&1; then
+    info "Installing the Claude desktop band (plugin agent-activity)"
+    if claude plugin marketplace add "$MARKET_SRC" >/dev/null \
+        && claude plugin install agent-activity@usage-statusline-claude >/dev/null; then
+        ok "Installed plugin agent-activity@usage-statusline-claude"
+    else
+        warn "Plugin install failed; run: claude plugin marketplace add $MARKET_SRC && claude plugin install agent-activity@usage-statusline-claude"
+    fi
+else
+    warn "claude CLI not found; skipped the desktop band. Later run: claude plugin marketplace add $MARKET_SRC && claude plugin install agent-activity@usage-statusline-claude"
+fi
+
 echo
 ok "Done! Restart Claude Code (or start a new session) to see the status line."

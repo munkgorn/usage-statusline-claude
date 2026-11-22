@@ -90,9 +90,23 @@ Open `~/.claude/statusline.sh` and tweak:
 - **Effort colors** — the per‑level colors in the `render_effort` function.
 - **Level thresholds** — the `40 / 60 / 75 / 90` percent breakpoints in `level_color` that drive the green → lime → amber → orange → red color of every bar.
 
+## Claude desktop
+
+The desktop app (Code tab) does not draw `statusLine`, so this repo also ships a desktop plugin, `agent-activity` (in [`desktop/`](desktop)), that draws the same data as a band above the prompt: a pixel Claude + speech bubble per agent (main loop and each running subagent, with the tool it is on), the workspace path with a `worktree` tag and branch, and context / 5h / week bars with reset countdowns and pace. It renders only on the `desktop` surface; the terminal keeps using `statusline.sh`.
+
+`install.sh` installs it when the `claude` CLI is on your `PATH`. To install it by hand:
+
+```bash
+claude plugin marketplace add munkgorn/usage-statusline-claude
+```
+
+```bash
+claude plugin install agent-activity@usage-statusline-claude
+```
+
 ## Uninstall
 
-Remove the `statusLine` block from `~/.claude/settings.json` and delete `~/.claude/statusline.sh`.
+Remove the `statusLine` block from `~/.claude/settings.json` and delete `~/.claude/statusline.sh`. For the desktop band: `claude plugin uninstall agent-activity@usage-statusline-claude`.
 
 ## License
 

@@ -1,0 +1,1 @@
+{ "name": "agent-activity", "version": "0.1.0", "description": "Pane showing whether the main loop and each subagent is working, and which tool it is running", "types": "./types/index.d.ts" }

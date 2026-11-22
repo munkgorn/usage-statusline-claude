@@ -25,6 +25,8 @@ This project lives as **two files**:
 
 After changing the deployed file, copy it back: `cp ~/.claude/statusline.sh ./statusline.sh`, update `README.md` if layout/requirements changed, then commit. The user pushes directly to `main` for this personal repo.
 
+The **Claude desktop** version is a separate plugin (desktop mod), not this script: desktop does not draw `statusLine`. Its live copy is `~/.claude/local-plugins/agent-activity-local/agent-activity/` (marketplace `agent-activity-local`); the published copy is `desktop/`, listed by `.claude-plugin/marketplace.json` (marketplace `usage-statusline-claude`). It renders only when `e.surface === 'desktop'`, so terminal keeps the script. Sync the same way: `rsync -a --delete ~/.claude/local-plugins/agent-activity-local/agent-activity/ ./desktop/`. Don't enable both marketplaces' `agent-activity` at once or the band draws twice.
+
 ## Hard constraints when editing the script
 
 - **Never paste raw Nerd Font / Unicode glyphs into Edit/Write** — they get stripped to empty. Generate them with `printf '\xNN\xNN\xNN'` (UTF-8 bytes). Glyphs in use: apple `\xef\x85\xb9`, folder `\xef\x81\xbc`, branch `\xef\x90\x98`, gauge/ctx `\xef\x83\xa4`, clock/5h `\xef\x80\x97`, calendar/7d `\xef\x81\xb3`. The mini-bar's `■`/`□` are plain geometric Unicode and survive Edit fine.
