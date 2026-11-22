@@ -204,7 +204,10 @@ branch=""
 dirty_count=0
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then
     branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
-    [ -n "$branch" ] && dirty_count=$(git -C "$cwd" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    # cwd may be an untrusted repo: its core.fsmonitor would run on every refresh.
+    # shortcut: a repo clean filter (.gitattributes) still runs on status, as it does
+    # for Claude Code's own git status; count with diff-index if that ever matters.
+    [ -n "$branch" ] && dirty_count=$(git --no-optional-locks -c core.fsmonitor=false -C "$cwd" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 fi
 
 model_name=$(echo "$input" | jq -r '.model.display_name // empty')
