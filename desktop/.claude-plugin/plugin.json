@@ -1,1 +1,1 @@
-{ "name": "agent-activity", "version": "0.2.6", "description": "Desktop band above the prompt (a pixel Claude, context grid, 5h / weekly limits, folder and branch) and an Agents pane for running subagents", "types": "./types/index.d.ts" }
+{ "name": "agent-activity", "version": "0.2.9", "description": "Desktop band above the prompt (a pixel Claude, context grid, 5h / weekly limits, folder and branch) and an Agents pane for running subagents", "types": "./types/index.d.ts" }

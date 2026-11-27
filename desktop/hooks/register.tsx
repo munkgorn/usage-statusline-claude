@@ -71,9 +71,7 @@ const readWorkspace = async ($: EngineInterface): Promise<Workspace> => {
 // Copies to the surface's clipboard where it has one, else macOS's.
 const copy = async ($: EngineInterface, text: string, surface?: RenderSurface) => {
   const copied = await $.ui.copy({ text, surface }).catch(() => ({ isCopied: false }))
-  const isCopied =
-    copied.isCopied || (await $.process.run(['pbcopy'], { stdin: text, timeoutMs: 3000 }).catch(() => null))?.exitCode === 0
-  $.ui.toast(isCopied ? `Copied ${text}` : 'Could not copy')
+  if (!copied.isCopied) await $.process.run(['pbcopy'], { stdin: text, timeoutMs: 3000 }).catch(() => null)
 }
 
 const refreshWorkspace = async ($: EngineInterface) => {
@@ -187,26 +185,13 @@ export const register: Register = on => {
     const id = e.agentId
     const status = e.reason === 'aborted' ? 'aborted' : e.reason === 'answer' ? 'done' : 'failed'
     await update($, loops, all => patch(all, id, one => ({ ...one, status, running: [] })))
-    const agent = (await read($, loops))[id]
-    if (agent?.isSpawned) $.ui.toast(`${agent.label} ${status === 'done' ? 'เสร็จแล้ว' : status === 'aborted' ? 'ถูกยกเลิก' : 'ล้มเหลว'}`)
     await scheduleClose($)
 
     return next(e)
   })
 
-  // Every notification Claude Code raises in this session (a permission prompt,
-  // waiting for input) also lands as a toast in the app.
-  on('classic.Notification', async ($, e, next) => {
-    $.ui.toast(e.title ? `${e.title}: ${e.message}` : e.message, { timeoutMs: 8000 })
-
-    return next(e)
-  })
-
   on('tool.call', async ($, e, next) => {
-    if (e.agentId === undefined) {
-      if (e.tool === 'AskUserQuestion') $.ui.toast('Claude มีคำถามรอคำตอบ', { timeoutMs: 8000 })
-      return next(e)
-    }
+    if (e.agentId === undefined) return next(e)
     const id = e.agentId
     const call = { id: e.tool_use_id, tool: e.tool }
     await update($, loops, all =>
