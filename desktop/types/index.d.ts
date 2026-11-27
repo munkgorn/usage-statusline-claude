@@ -10,6 +10,8 @@ export type Loop = {
   running: RunningTool[]
   toolCount: number
   order: number
+  /** Which of the ten laptop colors this agent holds. */
+  seat: number
   isSpawned?: boolean
 }
 
@@ -22,21 +24,29 @@ export type Usage = {
   limits: LimitWindow[]
 }
 
+/** Which Claude the band draws: the sprout, the glasses, or the cloud rider. */
+export type Place = 'worktree' | 'local' | 'cloud'
+
 export type Workspace = {
   /** The session's directory, ~ for home. */
   path: string
-  /** The same, absolute: what Copy puts on the clipboard. */
+  /** The same, absolute: what a press on the folder label copies. */
   absPath: string
   /** The main checkout's folder name (a worktree's too); absent outside git. */
   repo?: string
   isRepoRoot: boolean
   isWorktree: boolean
+  place: Place
   branch?: string
-  dirty: number
 }
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-activity': { loops: Record<string, Loop>; usage: Usage | null; tick: number; workspace: Workspace | null }
+    'agent-activity': {
+      loops: Shaped<Record<string, Loop>>
+      usage: Usage | null
+      tick: number
+      workspace: Shaped<Workspace | null>
+    }
   }
 }
