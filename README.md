@@ -92,7 +92,7 @@ Open `~/.claude/statusline.sh` and tweak:
 
 ## Claude desktop
 
-The desktop app (Code tab) does not draw `statusLine`, so this repo also ships a desktop plugin, `agent-activity` (in [`desktop/`](desktop)), that draws the same data as a band above the prompt: a pixel Claude + speech bubble per agent (main loop and each running subagent, with the tool it is on), the workspace path with a `worktree` tag and branch, and context / 5h / week bars with reset countdowns and pace. It renders only on the `desktop` surface; the terminal keeps using `statusline.sh`.
+The desktop app (Code tab) does not draw `statusLine`, so this repo also ships a desktop plugin, `agent-activity` (in [`desktop/`](desktop)), that draws the same data as a band above the prompt: a pixel Claude that shows where the session runs (a sprout in a git worktree, clear glasses locally, a cloud rider in a cloud session) and changes expression while Claude works, context as a grid of squares that fills green, then orange from 50% and red from 80%, and 5h / week usage with reset countdowns. The folder and the branch sit on the band's top border; press either to copy it. Subagents get their own **Agents** pane beside the chat: a Claude with a laptop per agent and a speech cloud naming the tools it runs. The pane opens when an agent starts and closes a minute after the last one finishes. Everything renders only on the `desktop` surface; the terminal keeps using `statusline.sh`.
 
 `install.sh` installs it when the `claude` CLI is on your `PATH`. To install it by hand:
 
