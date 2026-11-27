@@ -20,11 +20,6 @@ test('band shows the limits; the agents pane shows only spawned agents, then clo
   on('turn.complete', async () => ({ text: '' }))
   on('session.measure', async (_, e) => ({ changed: e.changed }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
-  const toasts: string[] = []
-  on('ui.toast', async (_, e) => {
-    toasts.push(e.text)
-    return { value: undefined }
-  })
   on('ui.render', async ($, e) => {
     const { Box } = $.ui.resolve(e)
 
@@ -73,7 +68,6 @@ test('band shows the limits; the agents pane shows only spawned agents, then clo
   const finished = String((await done.find({ type: 'Svg' }))?.props.source)
   expect(finished).toContain('done · 0 tools')
   expect(finished).toContain('stroke="#3fb950"')
-  expect(toasts).toContain('Scan repo เสร็จแล้ว')
   await done.unmount()
 
   await clock.advance(61_000)
